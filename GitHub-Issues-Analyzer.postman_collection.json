@@ -1,0 +1,473 @@
+{
+	"info": {
+		"_postman_id": "github-issues-analyzer-001",
+		"name": "GitHub Issues Analyzer",
+		"description": "Collection for testing the GitHub Issues Analyzer API - Fetch and analyze GitHub issues using LLMs",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "github-issues-analyzer"
+	},
+	"item": [
+		{
+			"name": "Health Check",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						""
+					]
+				},
+				"description": "Check if the API is running and get basic information about available endpoints."
+			},
+			"response": []
+		},
+		{
+			"name": "Scan Repository - Small (Hello World)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Response has required fields\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('repo');",
+							"    pm.expect(jsonData).to.have.property('issues_fetched');",
+							"    pm.expect(jsonData).to.have.property('cached_successfully');",
+							"});",
+							"",
+							"pm.test(\"Caching was successful\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.cached_successfully).to.be.true;",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"repo\": \"octocat/Hello-World\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/scan",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"scan"
+					]
+				},
+				"description": "Scan a small test repository (octocat/Hello-World) to fetch and cache open issues."
+			},
+			"response": []
+		},
+		{
+			"name": "Scan Repository - Large (VS Code)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Multiple issues fetched\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.issues_fetched).to.be.above(0);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"repo\": \"microsoft/vscode\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/scan",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"scan"
+					]
+				},
+				"description": "Scan a large repository with many issues to test pagination handling."
+			},
+			"response": []
+		},
+		{
+			"name": "Scan Repository - Custom",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"repo\": \"{{custom_repo}}\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/scan",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"scan"
+					]
+				},
+				"description": "Scan any repository by setting the `custom_repo` variable (format: owner/name)."
+			},
+			"response": []
+		},
+		{
+			"name": "Scan Repository - Invalid Format (Error)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 422 (Validation Error)\", function () {",
+							"    pm.response.to.have.status(422);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"repo\": \"invalid-format\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/scan",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"scan"
+					]
+				},
+				"description": "Test validation error handling with invalid repository format."
+			},
+			"response": []
+		},
+		{
+			"name": "Scan Repository - Not Found (Error)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 400 (Bad Request)\", function () {",
+							"    pm.response.to.have.status(400);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"repo\": \"nonexistent/repository-12345\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/scan",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"scan"
+					]
+				},
+				"description": "Test error handling when repository doesn't exist."
+			},
+			"response": []
+		},
+		{
+			"name": "Analyze - Theme Analysis",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Response has analysis\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('analysis');",
+							"    pm.expect(jsonData.analysis).to.be.a('string');",
+							"    pm.expect(jsonData.analysis.length).to.be.above(0);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"// Note: Make sure to run a /scan request first!"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"repo\": \"octocat/Hello-World\",\n    \"prompt\": \"What are the common themes in these issues?\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/analyze",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"analyze"
+					]
+				},
+				"description": "Analyze issues to identify common themes. **Note:** Run `/scan` first to cache issues."
+			},
+			"response": []
+		},
+		{
+			"name": "Analyze - Priority Recommendation",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"// Note: Make sure to run a /scan request first!"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"repo\": \"microsoft/vscode\",\n    \"prompt\": \"What are the top 3 themes in these issues and which should be prioritized?\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/analyze",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"analyze"
+					]
+				},
+				"description": "Get LLM recommendations on which issues should be prioritized."
+			},
+			"response": []
+		},
+		{
+			"name": "Analyze - Sentiment Analysis",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"repo\": \"octocat/Hello-World\",\n    \"prompt\": \"Summarize the sentiment and urgency level of these issues\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/analyze",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"analyze"
+					]
+				},
+				"description": "Analyze the sentiment and urgency of issues in the repository."
+			},
+			"response": []
+		},
+		{
+			"name": "Analyze - Custom Prompt",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"repo\": \"{{custom_repo}}\",\n    \"prompt\": \"{{custom_prompt}}\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/analyze",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"analyze"
+					]
+				},
+				"description": "Analyze with custom repository and prompt using variables."
+			},
+			"response": []
+		},
+		{
+			"name": "Analyze - No Cached Issues (Error)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 404 (Not Found)\", function () {",
+							"    pm.response.to.have.status(404);",
+							"});",
+							"",
+							"pm.test(\"Error message mentions scanning\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.detail).to.include('scan');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"repo\": \"some/unscanned-repo\",\n    \"prompt\": \"Analyze these issues\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/analyze",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"analyze"
+					]
+				},
+				"description": "Test error handling when trying to analyze a repository that hasn't been scanned."
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "custom_repo",
+			"value": "facebook/react",
+			"type": "string"
+		},
+		{
+			"key": "custom_prompt",
+			"value": "What are the main issues users are facing?",
+			"type": "string"
+		}
+	]
+}
