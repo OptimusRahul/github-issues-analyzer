@@ -1,62 +1,66 @@
-"""Database connection management."""
-
-import sqlite3
+"""Async database connection and session management"""
 import logging
-from pathlib import Path
-from typing import Optional
+from typing import AsyncGenerator
 
-from src.config.settings import settings
-from src.models.database import SCHEMA
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
-# Configure logger
+from src.config import settings
+from src.models import Base
+
 logger = logging.getLogger(__name__)
 
+# Create async engine
+engine = create_async_engine(
+    f"sqlite+aiosqlite:///{settings.database_path}",
+    echo=False,
+    poolclass=NullPool,  # SQLite doesn't need pooling
+)
 
-def get_db_connection() -> sqlite3.Connection:
-    """
-    Get a connection to the SQLite database.
-    
-    Enables WAL mode for better concurrency and foreign key constraints.
-    
-    Returns:
-        sqlite3.Connection: Database connection object
-    """
+# Create async session factory
+AsyncSessionLocal = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False,
+)
+
+
+async def init_database() -> None:
+    """Initialize the database schema"""
     try:
-        logger.debug(f"Connecting to database: {settings.database_path}")
-        conn = sqlite3.connect(settings.database_path)
-        
-        # Enable WAL mode for better concurrency
-        conn.execute("PRAGMA journal_mode=WAL")
-        logger.debug("Enabled WAL mode for database")
-        
-        # Enable foreign key constraints
-        conn.execute("PRAGMA foreign_keys=ON")
-        logger.debug("Enabled foreign key constraints")
-        
-        # Return rows as sqlite3.Row objects for dict-like access
-        conn.row_factory = sqlite3.Row
-        
-        logger.debug("Database connection established successfully")
-        return conn
-    except Exception as e:
-        logger.error(f"Failed to connect to database: {str(e)}", exc_info=True)
-        raise
-
-
-def init_db() -> None:
-    """
-    Initialize the database by creating tables and indexes if they don't exist.
-    
-    This should be called once when the application starts.
-    """
-    logger.info("Initializing database...")
-    conn = get_db_connection()
-    try:
-        conn.executescript(SCHEMA)
-        conn.commit()
+        async with engine.begin() as conn:
+            # Create all tables
+            await conn.run_sync(Base.metadata.create_all)
         logger.info("Database initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize database: {str(e)}", exc_info=True)
         raise
-    finally:
-        conn.close()
+
+
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    """
+    Async context manager for database sessions
+    
+    Usage in FastAPI:
+        @app.get("/items")
+        async def get_items(db: AsyncSession = Depends(get_db_session)):
+            result = await db.execute(select(Item))
+            return result.scalars().all()
+    """
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+
+async def close_database() -> None:
+    """Close database connections"""
+    await engine.dispose()
+    logger.info("Database connections closed")

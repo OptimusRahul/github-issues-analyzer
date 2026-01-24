@@ -1,1 +1,1 @@
-"""GitHub Issues Analyzer - A FastAPI service for analyzing GitHub issues using LLMs."""
+"""GitHub Issues Analyzer - Main package"""

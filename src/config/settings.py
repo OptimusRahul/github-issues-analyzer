@@ -1,11 +1,11 @@
-"""Application configuration settings using Pydantic."""
-
-from pydantic_settings import BaseSettings, SettingsConfigDict
+"""Application configuration settings"""
+import os
 from typing import Optional
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
+    """Application settings loaded from environment variables"""
     
     # GitHub API Configuration
     github_token: Optional[str] = None

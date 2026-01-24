@@ -1,0 +1,1 @@
+"""External libraries integration module"""

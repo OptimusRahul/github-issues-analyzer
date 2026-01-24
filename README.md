@@ -1,333 +1,365 @@
 # GitHub Issues Analyzer
 
-A FastAPI-based service that fetches GitHub issues and analyzes them using Large Language Models (LLMs).
+A FastAPI-based application that fetches GitHub repository issues, caches them locally in SQLite, and uses OpenAI's LLM to provide intelligent analysis based on user prompts.
 
 ## Features
 
-- **Fetch & Cache**: Scan GitHub repositories and cache open issues locally
-- **LLM Analysis**: Analyze cached issues using natural language prompts
-- **REST API**: Clean, documented API with automatic OpenAPI docs
-- **Persistent Storage**: SQLite database for reliable data persistence
+- 🔍 **Fetch & Cache**: Automatically fetch all issues from any public GitHub repository
+- 💾 **Local Storage**: Store issues in SQLite for fast repeated analysis
+- 🤖 **AI-Powered Analysis**: Use OpenAI's LLM to analyze issues based on custom prompts
+- 🚀 **Fast API**: RESTful API built with FastAPI for high performance
+- 📊 **Smart Handling**: Automatically handles large repositories (3K+ issues) by analyzing the most recent issues
+- ⚡ **UV Support**: Uses UV for 10-100x faster dependency installation
 
 ## Architecture
 
-The application follows a layered architecture:
-
 ```
-API Layer (FastAPI) → Services (Business Logic) → Libraries (External APIs) → Database (SQLite)
-```
-
-### Project Structure
-
-```
-github-issues-analyzer/
-├── main.py                      # FastAPI application entry point
-├── requirements.txt             # Python dependencies
-├── .env.example                 # Example environment variables
-├── .gitignore                   # Git ignore rules
-├── README.md                    # This file
-└── src/
-    ├── config/
-    │   └── settings.py          # Configuration management
-    ├── database/
-    │   └── connection.py        # Database connection setup
-    ├── lib/
-    │   ├── github_client.py     # GitHub API wrapper (PyGithub)
-    │   └── openai_client.py     # OpenAI API wrapper
-    ├── models/
-    │   └── database.py          # Database schema
-    └── services/
-        ├── scan/
-        │   ├── service.py       # Scan business logic
-        │   └── schema.py        # Pydantic models
-        └── analyze/
-            ├── service.py       # Analyze business logic
-            └── schema.py        # Pydantic models
+Client → FastAPI → Services → External APIs
+                 ↓
+              SQLite DB
 ```
 
-## Setup Instructions
+**Workflow:**
+1. `/scan` endpoint: Fetches issues from GitHub → Stores in SQLite
+2. `/analyze` endpoint: Retrieves cached issues → Sends to OpenAI → Returns analysis
 
-### Prerequisites
+## Prerequisites
 
 - Python 3.10 or higher
-- GitHub account (optional, for higher API rate limits)
-- OpenAI API key (required)
+- [UV](https://github.com/astral-sh/uv) - Fast Python package manager
+- OpenAI API key ([Get one here](https://platform.openai.com/api-keys))
+- GitHub token (optional, but recommended for higher rate limits)
 
-### Installation
+## Installation
 
-1. **Clone the repository**
+**UV is 10-100x faster than traditional package managers!** [Learn more about UV](UV_GUIDE.md)
+
+### Automated Setup (Recommended)
 
 ```bash
+# Install UV
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# or: brew install uv
+
+# Clone and setup
 git clone <repository-url>
 cd github-issues-analyzer
+./setup_with_uv.sh
 ```
 
-2. **Create a virtual environment**
+### Manual Setup
+
+1. **Install UV:**
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   # or: brew install uv
+   ```
+
+2. **Clone the repository:**
+   ```bash
+   git clone <repository-url>
+   cd github-issues-analyzer
+   ```
+
+3. **Install dependencies:**
+   ```bash
+   uv sync
+   # This creates venv and installs dependencies automatically!
+   ```
+
+4. **Configure environment variables:**
+   ```bash
+   cp .env.example .env
+   ```
+   
+   Edit `.env` and add your API keys:
+   ```
+   OPENAI_API_KEY=your_openai_api_key_here
+   GITHUB_TOKEN=your_github_token_here  # Optional but recommended
+   ```
+
+## Usage
+
+### Start the Server
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Option 1: Using uv run (recommended - no activation needed!)
+uv run main.py
+
+# Option 2: Traditional way
+source .venv/bin/activate
+python main.py
 ```
 
-3. **Install dependencies**
+The API will be available at `http://localhost:8000`
+
+Interactive API documentation: `http://localhost:8000/docs`
+
+### API Endpoints
+
+#### 1. Health Check
 
 ```bash
-pip install -r requirements.txt
-```
-
-4. **Configure environment variables**
-
-Copy the example environment file and add your API keys:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` and add your credentials:
-
-```env
-# Required: OpenAI API key
-OPENAI_API_KEY=your_openai_api_key_here
-
-# Optional: GitHub token (increases rate limit from 60 to 5000 requests/hour)
-GITHUB_TOKEN=your_github_token_here
-
-# Optional: OpenAI model (defaults to gpt-4-turbo-preview)
-OPENAI_MODEL=gpt-4-turbo-preview
-
-# Optional: Database path (defaults to github_issues.db)
-DATABASE_PATH=github_issues.db
-```
-
-## Running the Application
-
-Start the FastAPI server:
-
-```bash
-uvicorn main:app --reload
-```
-
-The server will start at `http://localhost:8000`
-
-### Interactive API Documentation
-
-Once the server is running, visit:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-
-## API Usage
-
-### Using Postman (Recommended)
-
-A complete Postman collection is included for easy testing:
-
-1. **Import the collection**: `GitHub-Issues-Analyzer.postman_collection.json`
-2. **Follow the guide**: See `POSTMAN_GUIDE.md` for detailed instructions
-3. **11 pre-configured requests** with automated tests included
-
-The collection includes:
-- Health check endpoint
-- Multiple scan scenarios (small/large repos, error cases)
-- Various analysis prompts (themes, priorities, sentiment)
-- Automated validation tests
-- Customizable variables
-
-### Using cURL
-
-### 1. Scan a Repository
-
-Fetch and cache all open issues from a GitHub repository:
-
-```bash
-curl -X POST http://localhost:8000/scan \
-  -H "Content-Type: application/json" \
-  -d '{"repo": "octocat/Hello-World"}'
+GET /health
 ```
 
 **Response:**
 ```json
 {
-  "repo": "octocat/Hello-World",
+  "status": "healthy",
+  "service": "github-issues-analyzer"
+}
+```
+
+#### 2. Scan Repository
+
+Fetch and cache issues from a GitHub repository.
+
+```bash
+POST /scan
+Content-Type: application/json
+
+{
+  "repo": "owner/repository-name"
+}
+```
+
+**Example:**
+```bash
+curl -X POST "http://localhost:8000/scan" \
+  -H "Content-Type: application/json" \
+  -d '{"repo": "facebook/react"}'
+```
+
+**Response:**
+```json
+{
+  "repo": "facebook/react",
   "issues_fetched": 42,
   "cached_successfully": true
 }
 ```
 
-### 2. Analyze Issues
+#### 3. Analyze Repository
 
-Analyze cached issues using a natural language prompt:
+Analyze cached issues using AI.
 
 ```bash
-curl -X POST http://localhost:8000/analyze \
+POST /analyze
+Content-Type: application/json
+
+{
+  "repo": "owner/repository-name",
+  "prompt": "Your analysis question"
+}
+```
+
+**Example:**
+```bash
+curl -X POST "http://localhost:8000/analyze" \
   -H "Content-Type: application/json" \
   -d '{
-    "repo": "octocat/Hello-World",
-    "prompt": "What are the common themes in these issues and which should be prioritized?"
+    "repo": "facebook/react",
+    "prompt": "What are the main themes in recent issues? What should maintainers prioritize?"
   }'
 ```
 
 **Response:**
 ```json
 {
-  "analysis": "Based on the 42 open issues in this repository, here are the key themes:\n\n1. Documentation improvements (15 issues)...\n\n[LLM-generated analysis]"
+  "repo": "facebook/react",
+  "prompt": "What are the main themes in recent issues?",
+  "analysis": "Based on the analyzed issues, here are the main themes...",
+  "issues_analyzed": 42
 }
 ```
 
-## Storage Choice Rationale
-
-### Why SQLite?
-
-We chose **SQLite** as the storage solution for the following reasons:
-
-1. **ACID Properties**: Ensures data consistency and reliability with atomic transactions
-2. **Query Flexibility**: SQL support enables complex queries and future feature additions
-3. **Easy Migration**: Schema design allows seamless migration to PostgreSQL for production
-4. **Indexed Lookups**: Handles multiple repositories efficiently with indexed queries
-5. **Persistent Storage**: Data survives server restarts with minimal setup
-6. **Zero Configuration**: No separate database server required for MVP
-7. **Production-Ready**: Used by major applications (browsers, mobile apps) at scale
-
-### Database Schema
-
-The application uses a normalized relational schema:
-
-- **repositories**: Stores repository metadata with UUID primary key
-- **issues**: Stores issue details with foreign key to repositories
-- **Indexes**: Optimized for lookups by repository name and joins
-
-This design supports:
-- Multiple repositories efficiently
-- Fast queries by repository
-- CASCADE deletes for data consistency
-- Future migration to PostgreSQL
-
-## Development Prompts Log
-
-This section documents the AI-assisted development process as required by the project specification.
-
-### Planning Phase
-
-1. **Initial Architecture Design**
-   - Prompt: "Design a FastAPI application with layered architecture for fetching GitHub issues and analyzing them with LLMs. Use SQLite for storage."
-   - Result: Established the services-based architecture with clear separation of concerns
-
-2. **Database Schema Design**
-   - Prompt: "Design a SQLite schema for storing GitHub repositories and issues with proper normalization and indexing"
-   - Result: Created normalized schema with UUID primary keys and foreign key relationships
-
-### Implementation Phase
-
-3. **Configuration Management**
-   - Prompt: "Implement Pydantic BaseSettings for managing environment variables with validation"
-   - Result: Created `src/config/settings.py` with type-safe configuration
-
-4. **GitHub Client Implementation**
-   - Prompt: "Create a wrapper around PyGithub that fetches open issues with pagination handling"
-   - Result: Implemented `GitHubClient` with error handling and rate limit management
-
-5. **OpenAI Client Implementation**
-   - Prompt: "Create an OpenAI client that formats GitHub issues and handles token limits for LLM analysis"
-   - Result: Implemented context management with truncation for large issue sets
-
-6. **Service Layer**
-   - Prompt: "Implement scan and analyze services with database operations and error handling"
-   - Result: Created clean service interfaces with transaction management
-
-7. **API Endpoints**
-   - Prompt: "Create FastAPI endpoints with proper error handling and OpenAPI documentation"
-   - Result: Implemented RESTful endpoints with comprehensive error responses
-
-### LLM Prompt Engineering
-
-8. **System Prompt for Analysis**
-   - Used prompt: "You are an expert at analyzing GitHub issues. Provide actionable insights based on the data provided. Be specific, concise, and focus on patterns and priorities."
-   - This guides the LLM to provide practical, structured analysis
-
-9. **Issue Formatting**
-   - Structured issues with: title, creation date, URL, and truncated body
-   - Ensures LLM has context while managing token limits
-
-## Testing Checklist
-
-- [ ] Test `/scan` with small repository (e.g., `octocat/Hello-World`)
-- [ ] Test `/scan` with large repository (100+ issues)
-- [ ] Test `/analyze` before scanning (should return 404)
-- [ ] Test `/analyze` with various prompts
-- [ ] Test invalid repository format
-- [ ] Test with missing environment variables
-- [ ] Test repository with 0 open issues
-
 ## Example Use Cases
 
-### 1. Priority Analysis
-```bash
-# Scan a repository
-curl -X POST http://localhost:8000/scan \
-  -H "Content-Type: application/json" \
-  -d '{"repo": "microsoft/vscode"}'
-
-# Analyze for priorities
-curl -X POST http://localhost:8000/analyze \
-  -H "Content-Type: application/json" \
-  -d '{
-    "repo": "microsoft/vscode",
-    "prompt": "What are the top 3 most critical issues that should be addressed first?"
-  }'
+### 1. Find Common Themes
+```json
+{
+  "repo": "python/cpython",
+  "prompt": "What are the most common types of issues reported?"
+}
 ```
 
-### 2. Theme Discovery
-```bash
-curl -X POST http://localhost:8000/analyze \
-  -H "Content-Type: application/json" \
-  -d '{
-    "repo": "facebook/react",
-    "prompt": "What are the common themes across these issues?"
-  }'
+### 2. Prioritization Recommendations
+```json
+{
+  "repo": "microsoft/vscode",
+  "prompt": "Based on recent issues, what should the maintainers fix first?"
+}
 ```
 
-### 3. Sentiment Analysis
-```bash
-curl -X POST http://localhost:8000/analyze \
-  -H "Content-Type: application/json" \
-  -d '{
-    "repo": "nodejs/node",
-    "prompt": "Analyze the sentiment and urgency level of these issues"
-  }'
+### 3. Feature Request Analysis
+```json
+{
+  "repo": "rust-lang/rust",
+  "prompt": "Summarize the feature requests from the last 100 issues"
+}
 ```
 
-## Scalability Considerations
+### 4. Bug Pattern Detection
+```json
+{
+  "repo": "nodejs/node",
+  "prompt": "Are there any patterns in the bug reports that suggest systemic issues?"
+}
+```
 
-### Current MVP
-- Single uvicorn process
-- SQLite with WAL mode for concurrent reads
-- Synchronous API calls
+## Error Handling
 
-### Future Enhancements
-1. **Async Operations**: Convert to `async def` endpoints with `httpx`
-2. **PostgreSQL**: Migrate to PostgreSQL for production workloads
-3. **Multi-Worker**: Deploy with multiple uvicorn workers
-4. **Caching Layer**: Add Redis for LLM response caching
-5. **Background Jobs**: Use Celery for long-running scans
-6. **Rate Limiting**: Implement API rate limiting for production
+### Repository Not Scanned (404)
+```json
+{
+  "detail": "Repository 'owner/repo' has not been scanned yet. Please scan it first using the /scan endpoint."
+}
+```
+
+### No Issues Found (400)
+```json
+{
+  "detail": "No issues found for repository 'owner/repo'. The repository may have no issues or the scan may have failed."
+}
+```
+
+### Invalid Repository Format (400)
+```json
+{
+  "detail": "Repository must be in format 'owner/repository-name'. Example: 'facebook/react'"
+}
+```
+
+### GitHub API Rate Limit (400)
+```json
+{
+  "detail": "GitHub API rate limit exceeded. Please provide a GITHUB_TOKEN in .env file for higher limits."
+}
+```
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `OPENAI_API_KEY` | Yes | - | Your OpenAI API key |
+| `GITHUB_TOKEN` | No | - | GitHub personal access token (increases rate limit from 60 to 5000/hour) |
+| `OPENAI_MODEL` | No | `gpt-4-turbo-preview` | OpenAI model to use for analysis |
+| `DATABASE_PATH` | No | `github_issues.db` | Path to SQLite database file |
+
+### Large Repositories (3K+ Issues)
+
+For repositories with thousands of issues, the application automatically:
+- Sorts issues by creation date (most recent first)
+- Analyzes the 200 most recent issues
+- Includes a note in the response indicating the limitation
+
+This approach ensures:
+- Fast response times
+- Stays within LLM token limits
+- Focuses on the most relevant recent issues
+
+## Project Structure
+
+```
+github-issues-analyzer/
+├── src/
+│   ├── app.py              # FastAPI application
+│   ├── config/
+│   │   └── settings.py     # Configuration management
+│   ├── database/
+│   │   └── connection.py   # SQLite connection & initialization
+│   ├── models/
+│   │   └── database.py     # Pydantic models
+│   ├── libs/
+│   │   ├── github_client.py   # GitHub API wrapper
+│   │   └── openai_client.py   # OpenAI API wrapper
+│   └── services/
+│       ├── scan/
+│       │   ├── schema.py   # Scan schemas
+│       │   └── service.py  # Scan business logic
+│       └── analyze/
+│           ├── schema.py   # Analyze schemas
+│           └── service.py  # Analyze business logic
+├── main.py                 # Entry point
+├── pyproject.toml          # Python dependencies and project config
+├── .env                    # Environment variables (not in git)
+├── .env.example           # Environment variables template
+└── README.md              # This file
+```
+
+## Database Schema
+
+### Repos Table
+```sql
+CREATE TABLE repos (
+    id TEXT PRIMARY KEY,           -- "owner/repo" format
+    name TEXT NOT NULL,
+    created_at TIMESTAMP
+);
+```
+
+### Issues Table
+```sql
+CREATE TABLE issues (
+    id TEXT PRIMARY KEY,           -- "owner/repo#number" format
+    repo_id TEXT NOT NULL,         -- References repos.id
+    title TEXT NOT NULL,
+    body TEXT,
+    html_url TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    FOREIGN KEY (repo_id) REFERENCES repos(id)
+);
+```
+
+## Development
+
+### Running with Auto-Reload
+```bash
+python main.py
+```
+
+### Running with Uvicorn Directly
+```bash
+uvicorn src.app:app --reload --host 0.0.0.0 --port 8000
+```
+
+### View API Documentation
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
 
 ## Troubleshooting
 
-### GitHub API Rate Limit
-- **Symptom**: "GitHub API rate limit exceeded"
-- **Solution**: Add `GITHUB_TOKEN` to `.env` to increase limit from 60 to 5000 requests/hour
+### Issue: "ModuleNotFoundError: No module named 'src'"
+**Solution:** Make sure you're running the application from the project root directory.
 
-### OpenAI API Errors
-- **Symptom**: "OpenAI API error: Incorrect API key"
-- **Solution**: Verify `OPENAI_API_KEY` in `.env` is correct
+### Issue: "OpenAI API error: Incorrect API key"
+**Solution:** Verify your `OPENAI_API_KEY` in the `.env` file is correct.
 
-### Database Locked
-- **Symptom**: "database is locked"
-- **Solution**: Ensure WAL mode is enabled (done automatically). Check no other process is writing.
+### Issue: "GitHub API rate limit exceeded"
+**Solution:** Add a `GITHUB_TOKEN` to your `.env` file to increase the rate limit from 60 to 5000 requests per hour.
+
+### Issue: "Repository not found"
+**Solution:** Verify the repository format is correct (`owner/repo`) and the repository is public.
+
+## Future Enhancements
+
+- [ ] Pagination for analyze endpoint
+- [ ] Caching of LLM responses
+- [ ] Background job processing for large repositories
+- [ ] Rate limiting
+- [ ] Authentication/Authorization
+- [ ] Issue update synchronization
+- [ ] Advanced filtering (by labels, state, date range)
+- [ ] Multiple LLM provider support
+- [ ] Web UI for easier interaction
 
 ## License
 
-MIT
+MIT License
 
 ## Contributing
 
-Contributions welcome! Please ensure code follows the established architecture patterns.
+Contributions are welcome! Please feel free to submit a Pull Request.

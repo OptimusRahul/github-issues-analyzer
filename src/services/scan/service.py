@@ -1,98 +1,98 @@
-"""Scan service business logic."""
+"""Async scan service for fetching and caching GitHub issues"""
 
-import uuid
 import logging
-from typing import Dict, Any
+from datetime import datetime
 
-from src.lib.github_client import GitHubClient
-from src.database.connection import get_db_connection
+from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
-# Configure logger
+from src.libs.github_client import GitHubClient
+from src.models.database import Issue, Repo
+
+from .schema import ScanResponse
+
 logger = logging.getLogger(__name__)
 
 
-def scan_repository(repo_name: str) -> Dict[str, Any]:
-    """
-    Fetch issues from GitHub and store in database.
-    
-    Args:
-        repo_name: Repository in format "owner/name"
-        
-    Returns:
-        Dictionary with repo, issues_fetched, and cached_successfully
-        
-    Raises:
-        ValueError: If repository not found or invalid
-        Exception: For database or API errors
-    """
-    logger.info(f"Starting scan for repository: {repo_name}")
-    
-    # 1. Fetch issues from GitHub using PyGithub
-    try:
-        github_client = GitHubClient()
-        issues = github_client.fetch_open_issues(repo_name)
-        logger.info(f"Fetched {len(issues)} issues from GitHub")
-    except Exception as e:
-        logger.error(f"Failed to fetch issues from GitHub: {str(e)}", exc_info=True)
-        raise
-    
-    # 2. Store in database (transaction: delete old + insert new)
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    try:
-        # 2a. Get or create repository record with UUID
-        # First check if repository exists
-        logger.debug(f"Checking if repository {repo_name} exists in database")
-        cursor.execute("SELECT id FROM repositories WHERE repo_name = ?", (repo_name,))
-        row = cursor.fetchone()
-        
-        if row:
-            repository_id = row['id']
-            logger.debug(f"Repository exists with ID: {repository_id}, updating metadata")
-            # Update existing repository
-            cursor.execute(
-                "UPDATE repositories SET last_scanned_at = datetime('now'), issue_count = ? WHERE id = ?",
-                (len(issues), repository_id)
+class ScanService:
+    """Async service for scanning GitHub repositories"""
+
+    def __init__(self):
+        """Initialize scan service"""
+        self.github_client = GitHubClient()
+
+    async def scan_repository(self, repo: str, db: AsyncSession) -> ScanResponse:
+        """
+        Scan a GitHub repository and cache its issues in the database
+
+        Args:
+            repo: Repository in format 'owner/repository-name'
+            db: AsyncSession for database operations
+
+        Returns:
+            ScanResponse with results of the scan
+
+        Raises:
+            ValueError: If GitHub API errors occur or repository is invalid
+        """
+        logger.info(f"Starting scan for repository: {repo}")
+
+        # Parse owner and repo name
+        owner, repo_name = repo.split("/")
+
+        # Fetch issues from GitHub (synchronous GitHub client)
+        try:
+            issues = self.github_client.fetch_repository_issues(owner, repo_name)
+            logger.info(f"Fetched {len(issues)} issues from GitHub for {repo}")
+        except Exception as e:
+            logger.error(f"Failed to fetch issues from GitHub: {str(e)}", exc_info=True)
+            raise ValueError(f"Failed to fetch issues from GitHub: {str(e)}")
+
+        # Store in database
+        try:
+            # Upsert repository record
+            stmt = insert(Repo).values(id=repo, name=repo, created_at=datetime.utcnow())
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["id"], set_=dict(name=repo, created_at=datetime.utcnow())
             )
-        else:
-            # Create new repository with UUID
-            repository_id = str(uuid.uuid4())
-            logger.info(f"Creating new repository record with ID: {repository_id}")
-            cursor.execute(
-                "INSERT INTO repositories (id, repo_name, last_scanned_at, issue_count) "
-                "VALUES (?, ?, datetime('now'), ?)",
-                (repository_id, repo_name, len(issues))
-            )
-        
-        # 2b. Delete old issues and insert new ones
-        logger.debug(f"Deleting old issues for repository_id: {repository_id}")
-        cursor.execute("DELETE FROM issues WHERE repository_id = ?", (repository_id,))
-        
-        logger.debug(f"Inserting {len(issues)} issues into database")
-        for idx, issue in enumerate(issues, 1):
-            cursor.execute(
-                "INSERT INTO issues (id, repository_id, title, body, html_url, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (issue['id'], repository_id, issue['title'], issue['body'],
-                 issue['html_url'], issue['created_at'])
-            )
-            if idx % 10 == 0:
-                logger.debug(f"Inserted {idx}/{len(issues)} issues")
-        
-        conn.commit()
-        logger.info(f"Successfully cached {len(issues)} issues for {repo_name}")
-        
-        # 3. Return summary
-        return {
-            "repo": repo_name,
-            "issues_fetched": len(issues),
-            "cached_successfully": True
-        }
-        
-    except Exception as e:
-        logger.error(f"Database error while caching issues: {str(e)}", exc_info=True)
-        conn.rollback()
-        raise Exception(f"Database error while caching issues: {str(e)}")
-    finally:
-        conn.close()
+            await db.execute(stmt)
+            logger.info(f"Repository {repo} record upserted")
+
+            # Upsert issues
+            issues_stored = 0
+            for issue in issues:
+                issue_id = f"{repo}#{issue['id']}"
+
+                stmt = insert(Issue).values(
+                    id=issue_id,
+                    repo_id=repo,
+                    title=issue["title"],
+                    body=issue["body"],
+                    html_url=issue["html_url"],
+                    created_at=datetime.fromisoformat(issue["created_at"].replace("Z", "+00:00")),
+                )
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["id"],
+                    set_=dict(
+                        repo_id=repo,
+                        title=issue["title"],
+                        body=issue["body"],
+                        html_url=issue["html_url"],
+                        created_at=datetime.fromisoformat(
+                            issue["created_at"].replace("Z", "+00:00")
+                        ),
+                    ),
+                )
+                await db.execute(stmt)
+                issues_stored += 1
+
+            await db.commit()
+            logger.info(f"Stored {issues_stored} issues for {repo}")
+
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Failed to store issues in database: {str(e)}", exc_info=True)
+            raise ValueError(f"Failed to store issues in database: {str(e)}")
+
+        # Return response
+        return ScanResponse(repo=repo, issues_fetched=len(issues), cached_successfully=True)

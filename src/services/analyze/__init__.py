@@ -1,1 +1,4 @@
-"""Analyze service for LLM-based issue analysis."""
+"""Analyze service module"""
+from .service import AnalyzeService
+
+__all__ = ["AnalyzeService"]
