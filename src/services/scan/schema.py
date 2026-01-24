@@ -1,6 +1,7 @@
 """Schemas for scan service - re-exported from models"""
 
 import re
+from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -44,18 +45,28 @@ class ScanResponse(BaseModel):
         {
             "repo": "owner/repository-name",
             "issues_fetched": 42,
-            "cached_successfully": true
+            "cached_successfully": true,
+            "message": "Repository already scanned. Found 42 cached issues."
         }
     """
 
     repo: str = Field(..., description="Repository that was scanned")
     issues_fetched: int = Field(..., description="Number of issues fetched")
     cached_successfully: bool = Field(..., description="Whether caching was successful")
+    message: Optional[str] = Field(
+        None, description="Optional message about the scan result (e.g., if repo was already scanned)"
+    )
 
     model_config = {
         "json_schema_extra": {
             "examples": [
-                {"repo": "owner/repository-name", "issues_fetched": 42, "cached_successfully": True}
+                {"repo": "owner/repository-name", "issues_fetched": 42, "cached_successfully": True},
+                {
+                    "repo": "facebook/react",
+                    "issues_fetched": 42,
+                    "cached_successfully": True,
+                    "message": "Repository already scanned. Found 42 cached issues.",
+                },
             ]
         }
     }

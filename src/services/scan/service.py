@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime
 
+from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,6 +40,26 @@ class ScanService:
 
         # Parse owner and repo name
         owner, repo_name = repo.split("/")
+
+        # Check if repository already exists in database
+        result = await db.execute(select(Repo).where(Repo.id == repo))
+        logger.info(f"Checking if repository {repo} exists in database")
+        existing_repo = result.scalar_one_or_none()
+        logger.info(f"Repository {repo} exists in database: {existing_repo}")
+
+        if existing_repo:
+            # Count existing issues for this repo
+            result = await db.execute(select(Issue).where(Issue.repo_id == repo))
+            existing_issues = result.scalars().all()
+            issues_count = len(existing_issues)
+
+            logger.info(f"Repository {repo} already scanned with {issues_count} issues")
+            return ScanResponse(
+                repo=repo,
+                issues_fetched=issues_count,
+                cached_successfully=True,
+                message=f"Repository already scanned. Found {issues_count} cached issues.",
+            )
 
         # Fetch issues from GitHub (synchronous GitHub client)
         try:

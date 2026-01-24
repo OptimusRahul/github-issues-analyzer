@@ -78,7 +78,7 @@ If a repo has 3K issues how are we going to pass in LLM?
 Follow up prompts:
 
 1. 
-<terminal logs> Got some error which is not visible in the terminal but got in API response, add the logs and fix this issue
+<@/Users/ghost/.cursor/projects/Users-ghost-Developer-github-issues-analyzer/terminals/5.txt:29-32> Got some error which is not visible in the terminal but got in API response, add the logs and fix this issue
 {
   "detail": "Failed to analyze issues with LLM: Client.__init__() got an unexpected keyword argument 'proxies'"
 }
@@ -91,4 +91,42 @@ This project isn't using async / await @src/services @src/app.py
 
 3. make the application to use "uv"
 
-4. <@GitHub Issue Analyzer with Local Caching + LLM Processing.md> take this file in context and add default for the request @src/services/analyze @src/services/scanas per the documents 
+4. remove everything related to pip, don't create any files
+
+5. <@/Users/ghost/.cursor/projects/Users-ghost-Developer-github-issues-analyzer/terminals/5.txt:12-59> fix this error while installing the package
+
+6. can't we run main.py with uv?
+
+7. @src/libs/openai_client.py where in this file we're chunking the issues?
+
+8. Don't implement any thing. Now tell me about the possible approaches (for handling large numbers of issues like 3K+)
+
+9. @src/models/issues_model.py this is still in use?
+
+10. @GitHub Issue Analyzer with Local Caching + LLM Processing.md take this file in context and add default for the request @src/services/analyze @src/services/scan as per the documents
+
+11. @src/libs/github_client.py this should fetch only open issues
+
+12. @prompt.txt convert this to a md file
+
+13. @src/services/scan/service.py In this service add the check if a repo exists then return a proper that repo is scanned
+
+
+Analyze Prompt:
+# Create system prompt
+system_prompt = (
+    "You are an expert at analyzing GitHub issues. "
+    "You help maintainers understand patterns, themes, and priorities in their issue tracker. "
+    "Provide clear, actionable insights based on the issues provided."
+)
+
+# Create user prompt with context
+full_prompt = f"""
+    Analyze the following GitHub issues and respond to this request:
+
+    User Prompt: {user_prompt}
+
+    Issues to analyze:
+    {issues_text}
+"""
+logger.info(f"Full prompt: {full_prompt}")
