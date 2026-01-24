@@ -88,7 +88,7 @@ uv run main.py
 
 # Option 2: Traditional way
 source .venv/bin/activate
-python main.py
+uv run uvicorn src.app:app --reload
 ```
 
 The API will be available at `http://localhost:8000`
