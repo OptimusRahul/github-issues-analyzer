@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 
 from tests.triage.helpers import gh_comment, gh_issue
 from triage.bench import (
@@ -12,14 +11,6 @@ from triage.bench import (
     is_closed_duplicate,
     render_report,
 )
-from triage.store import Store
-
-
-@pytest.fixture
-def store(tmp_path):
-    s = Store(tmp_path / "index.sqlite")
-    yield s
-    s.close()
 
 
 def test_find_original_parses_hash_and_url_forms():

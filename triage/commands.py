@@ -36,7 +36,7 @@ def check_duplicates(
     sync_repo(gh, store, repo, now, cfg.comments_window_days)
     embed_pending(store, embedder)
     candidates = find_candidates(store, embedder.name, number, cfg.duplicates, cfg.exclude_labels, now)
-    if candidates and confirmer is not None:
+    if confirmer is not None:
         candidates = confirmer.confirm(store.issue(number), candidates, store.issue)
     if not candidates:
         return DupesOutcome(action="none")

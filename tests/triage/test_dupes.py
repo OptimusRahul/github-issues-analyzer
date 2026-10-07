@@ -6,17 +6,9 @@ from tests.triage.helpers import WordHashEmbedder, gh_issue
 from triage.config import DuplicatesConfig
 from triage.dupes import NotInIndex, find_candidates
 from triage.embed import embed_pending
-from triage.store import Store
 
 NOW = datetime(2026, 6, 1, tzinfo=timezone.utc)
 CFG = DuplicatesConfig(threshold=0.5, max_candidates=3, closed_window_days=180)
-
-
-@pytest.fixture
-def store(tmp_path):
-    s = Store(tmp_path / "index.sqlite")
-    yield s
-    s.close()
 
 
 def index(store, issues):

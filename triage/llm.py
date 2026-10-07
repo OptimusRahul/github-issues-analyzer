@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import Callable
 
-from triage.config import LLMConfig
+from triage.config import LLMConfig, is_int
 from triage.dupes import Candidate
+from triage.embed import openai_client
 from triage.text import issue_text, sanitize
 
 SYSTEM_PROMPT = (
@@ -33,12 +33,9 @@ def build_prompt(issue: dict, candidates: list[dict]) -> str:
 
 
 class Confirmer:
-    def __init__(self, cfg: LLMConfig, client=None):
-        if client is None:
-            from openai import OpenAI
-
-            client = OpenAI(base_url=cfg.base_url, api_key=os.environ.get(cfg.api_key_env) or "not-needed")
-        self.client = client
+    def __init__(self, cfg: LLMConfig, client=None, max_calls: int | None = None):
+        self.client = client or openai_client(cfg.base_url, cfg.api_key_env)
+        self.max_calls = max_calls
         self.model = cfg.model
         self.calls = 0
         self.prompt_tokens = 0
@@ -49,6 +46,8 @@ class Confirmer:
 
     def _ask(self, prompt: str) -> dict | None:
         for _ in range(2):
+            if self.max_calls is not None and self.calls >= self.max_calls:
+                return None
             self.calls += 1
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -69,7 +68,8 @@ class Confirmer:
         return None
 
     def confirm(self, issue: dict, candidates: list[Candidate], lookup: Callable[[int], dict]) -> list[Candidate]:
-        """Keep the candidates the model says are the same problem. Falls back to all candidates, without reasons, if the model never returns valid JSON."""
+        """Keep the candidates the model says are the same problem. Falls back to all candidates, without reasons,
+        if the model never returns valid JSON or the call budget is spent."""
         if not candidates:
             return []
         data = self._ask(build_prompt(issue, [lookup(c.number) for c in candidates]))
@@ -79,7 +79,7 @@ class Confirmer:
         confirmed: list[Candidate] = []
         for item in data["duplicates"]:
             number = item.get("number") if isinstance(item, dict) else None
-            if isinstance(number, int) and not isinstance(number, bool) and number in by_number:
+            if is_int(number) and number in by_number:
                 candidate = by_number.pop(number)
                 candidate.reason = sanitize(str(item.get("reason") or "")) or None
                 confirmed.append(candidate)

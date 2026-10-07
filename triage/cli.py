@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from contextlib import ExitStack
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -63,7 +64,7 @@ def format_outcome(number: int, outcome: DupesOutcome) -> str:
 
 def usage_lines(*models) -> str:
     """Token usage of API-backed models (local models report nothing; they cost nothing)."""
-    lines = [m.usage_summary() for m in models if m is not None and hasattr(m, "usage_summary")]
+    lines = [summary for m in models if m is not None and (summary := m.usage_summary())]
     return "\n".join(["Model usage:", *(f"  {line}" for line in lines)]) if lines else ""
 
 
@@ -84,7 +85,7 @@ def _bench(args, cfg, gh, store, repo, now) -> None:
     numbers, vectors = store.matrix(embedder.name)
     result = evaluate(numbers, vectors, pairs, embedder.name, sample_size=args.sample)
     llm_result = None
-    confirmer = Confirmer(cfg.models.llm) if args.llm else None
+    confirmer = Confirmer(cfg.models.llm, max_calls=cfg.limits.max_llm_calls_per_run) if args.llm else None
     if confirmer is not None:
         threshold = result.recommended.threshold if result.recommended else cfg.duplicates.threshold
         llm_result = evaluate_with_llm(
@@ -103,32 +104,29 @@ def _bench(args, cfg, gh, store, repo, now) -> None:
 
 def _run(args: argparse.Namespace) -> int:
     cfg = load_config(args.config)
-    gh = GitHubClient(token=os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN"))
-    try:
+    with ExitStack() as stack:
+        gh = GitHubClient(token=os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN"))
+        stack.callback(gh.close)
         repo = gh.resolve_repo(args.repo)
         store = Store(index_path(args.index_dir, repo))
+        stack.callback(store.close)
         now = datetime.now(timezone.utc)
-        try:
-            if args.command == "sync":
-                result = sync_repo(gh, store, repo, now, cfg.comments_window_days)
-                print(
-                    f"Synced {repo}: {result.issues} issues, {result.comments} comments in {result.pages} pages. "
-                    f"Index holds {store.count_issues()} issues."
-                )
-            elif args.command == "dupes":
-                embedder = make_embedder(cfg.models.embeddings)
-                use_llm = cfg.models.llm.enabled and cfg.limits.max_llm_calls_per_run > 0
-                confirmer = Confirmer(cfg.models.llm) if use_llm else None
-                outcome = check_duplicates(gh, store, embedder, cfg, repo, args.number, now, confirmer)
-                print(format_outcome(args.number, outcome))
-                if usage := usage_lines(embedder, confirmer):
-                    print(usage)
-            elif args.command == "bench":
-                _bench(args, cfg, gh, store, repo, now)
-        finally:
-            store.close()
-    finally:
-        gh.close()
+        if args.command == "sync":
+            result = sync_repo(gh, store, repo, now, cfg.comments_window_days)
+            print(
+                f"Synced {repo}: {result.issues} issues, {result.comments} comments in {result.pages} pages. "
+                f"Index holds {store.count_issues()} issues."
+            )
+        elif args.command == "dupes":
+            embedder = make_embedder(cfg.models.embeddings)
+            llm = cfg.models.llm
+            confirmer = Confirmer(llm, max_calls=cfg.limits.max_llm_calls_per_run) if llm.enabled else None
+            outcome = check_duplicates(gh, store, embedder, cfg, repo, args.number, now, confirmer)
+            print(format_outcome(args.number, outcome))
+            if usage := usage_lines(embedder, confirmer):
+                print(usage)
+        elif args.command == "bench":
+            _bench(args, cfg, gh, store, repo, now)
     return 0
 
 

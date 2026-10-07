@@ -1,17 +1,12 @@
-import numpy as np
-
 from tests.triage.helpers import WordHashEmbedder, gh_issue
+from triage.embed import normalize
 
 
 def test_word_hash_embedder_is_deterministic_and_similarity_follows_shared_words():
     embedder = WordHashEmbedder()
-    a, b, c = embedder.embed(["crash on windows", "windows crash", "dark theme"])
-
-    def cos(x, y):
-        return float(x @ y / (np.linalg.norm(x) * np.linalg.norm(y)))
-
-    assert cos(a, b) > 0.8
-    assert cos(a, c) < 0.2
+    a, b, c = normalize(embedder.embed(["crash on windows", "windows crash", "dark theme"]))
+    assert a @ b > 0.8
+    assert a @ c < 0.2
     assert embedder.calls == 1
 
 

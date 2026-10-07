@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, is_dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, get_type_hints
 
 import yaml
 
@@ -64,33 +64,28 @@ class Config:
     limits: LimitsConfig = field(default_factory=LimitsConfig)
 
 
-_NESTED = {
-    (Config, "duplicates"): DuplicatesConfig,
-    (Config, "models"): ModelsConfig,
-    (Config, "limits"): LimitsConfig,
-    (ModelsConfig, "embeddings"): EmbeddingsConfig,
-    (ModelsConfig, "llm"): LLMConfig,
-}
-
-
 def _build(cls: type, data: Any, path: str):
     if data is None:
         return cls()
     if not isinstance(data, dict):
         raise ConfigError(f"{path or 'config file'}: expected a mapping")
     known = {f.name for f in fields(cls)}
+    hints = get_type_hints(cls)
     kwargs = {}
     for key, value in data.items():
         name = f"{path}.{key}" if path else key
         if key not in known:
             raise ConfigError(f"{name}: unknown setting")
-        nested = _NESTED.get((cls, key))
-        kwargs[key] = _build(nested, value, name) if nested else value
+        kwargs[key] = _build(hints[key], value, name) if is_dataclass(hints[key]) else value
     return cls(**kwargs)
 
 
-def _is_int(value: Any) -> bool:
+def is_int(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
+
+
+def is_number(value: Any) -> bool:
+    return is_int(value) or isinstance(value, float)
 
 
 def _validate(cfg: Config) -> None:
@@ -98,17 +93,17 @@ def _validate(cfg: Config) -> None:
     checks = [
         (isinstance(cfg.dry_run, bool), "dry_run: must be true or false"),
         (
-            isinstance(dup.threshold, (int, float)) and not isinstance(dup.threshold, bool) and 0 < dup.threshold <= 1,
+            is_number(dup.threshold) and 0 < dup.threshold <= 1,
             "duplicates.threshold: must be a number greater than 0 and at most 1",
         ),
-        (_is_int(dup.max_candidates) and 1 <= dup.max_candidates <= 10, "duplicates.max_candidates: must be an integer from 1 to 10"),
-        (_is_int(dup.closed_window_days) and dup.closed_window_days >= 0, "duplicates.closed_window_days: must be a non-negative integer"),
+        (is_int(dup.max_candidates) and 1 <= dup.max_candidates <= 10, "duplicates.max_candidates: must be an integer from 1 to 10"),
+        (is_int(dup.closed_window_days) and dup.closed_window_days >= 0, "duplicates.closed_window_days: must be a non-negative integer"),
         (dup.label is None or isinstance(dup.label, str), "duplicates.label: must be text or null"),
         (isinstance(cfg.exclude_labels, list), "exclude_labels: must be a list"),
-        (_is_int(cfg.comments_window_days) and cfg.comments_window_days >= 0, "comments_window_days: must be a non-negative integer"),
+        (is_int(cfg.comments_window_days) and cfg.comments_window_days >= 0, "comments_window_days: must be a non-negative integer"),
         (cfg.models.embeddings.provider in ("local", "openai"), "models.embeddings.provider: must be 'local' or 'openai'"),
         (
-            _is_int(cfg.limits.max_llm_calls_per_run) and cfg.limits.max_llm_calls_per_run >= 0,
+            is_int(cfg.limits.max_llm_calls_per_run) and cfg.limits.max_llm_calls_per_run >= 0,
             "limits.max_llm_calls_per_run: must be a non-negative integer",
         ),
     ]

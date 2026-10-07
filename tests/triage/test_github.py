@@ -141,3 +141,16 @@ def test_retries_bad_gateway():
     responses = [httpx.Response(502), httpx.Response(200, json={})]
     make_client(lambda request: responses.pop(0), sleep=sleeps.append).request("GET", "/x")
     assert sleeps == [1.0]
+
+
+def test_viewer_login_falls_back_to_actions_bot_only_on_403():
+    client = make_client(lambda request: httpx.Response(403, json={"message": "Resource not accessible by integration"}))
+    assert client.viewer_login() == "github-actions[bot]"
+
+
+def test_viewer_login_does_not_hide_other_errors():
+    def handler(request):
+        raise httpx.ConnectError("down", request=request)
+
+    with pytest.raises(GitHubError, match="Network error"):
+        make_client(handler, sleep=lambda s: None).viewer_login()

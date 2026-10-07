@@ -10,7 +10,6 @@ from triage.commands import check_duplicates
 from triage.config import Config, DuplicatesConfig, LLMConfig
 from triage.dupes import NotInIndex
 from triage.llm import Confirmer
-from triage.store import Store
 
 NOW = datetime(2026, 6, 1, tzinfo=timezone.utc)
 ISSUES = [
@@ -19,13 +18,6 @@ ISSUES = [
     gh_issue(3, "Add dark theme to editor"),
     gh_issue(4, "Fix typo", pr=True),
 ]
-
-
-@pytest.fixture
-def store(tmp_path):
-    s = Store(tmp_path / "index.sqlite")
-    yield s
-    s.close()
 
 
 def config(dry_run):

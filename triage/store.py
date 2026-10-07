@@ -57,7 +57,8 @@ ISSUE_COLUMNS = (
     "assignees", "milestone", "author",
 )
 
-# Columns added after the first release; ALTER TABLE adds them to older index files.
+# Columns added after indexes were first built; ALTER TABLE adds them to existing index files.
+# assignees, milestone, author and reactions are stored now (#15) so the v0.2 digest needs no full resync.
 ADDED_ISSUE_COLUMNS = {
     "assignees": "TEXT NOT NULL DEFAULT '[]'",
     "milestone": "TEXT",
@@ -174,7 +175,8 @@ class Store:
             for r in self.conn.execute("SELECT number, content_hash FROM embeddings WHERE model = ?", (model,))
         }
         pending = []
-        for issue in self.issues():
+        for row in self.conn.execute("SELECT number, title, body FROM issues ORDER BY number"):
+            issue = dict(row)
             text = text_for(issue)
             digest = hashlib.sha256(f"{model}\n{text}".encode()).hexdigest()
             if known.get(issue["number"]) != digest:
@@ -197,6 +199,6 @@ class Store:
         ).fetchall()
         if not rows:
             return np.zeros(0, dtype=np.int64), np.zeros((0, 0), dtype=np.float32)
-        numbers = np.array([r["number"] for r in rows], dtype=np.int64)
-        vectors = np.stack([np.frombuffer(r["vector"], dtype=np.float32) for r in rows])
+        numbers = np.array([r[0] for r in rows], dtype=np.int64)
+        vectors = np.frombuffer(b"".join(r[1] for r in rows), dtype=np.float32).reshape(len(rows), -1)
         return numbers, vectors

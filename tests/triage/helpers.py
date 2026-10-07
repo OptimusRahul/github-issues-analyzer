@@ -68,6 +68,9 @@ class WordHashEmbedder:
     def __init__(self):
         self.calls = 0
 
+    def usage_summary(self):
+        return ""
+
     def embed(self, texts):
         self.calls += 1
         out = np.zeros((len(texts), 256), dtype=np.float32)

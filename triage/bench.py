@@ -9,7 +9,7 @@ from typing import Callable
 
 import numpy as np
 
-from triage.dupes import Candidate
+from triage.dupes import Candidate, ranked
 from triage.store import Store
 
 DUP_REF = re.compile(r"duplicate of\s+(?:#|https://github\.com/[\w.-]+/[\w.-]+/issues/)(\d+)", re.IGNORECASE)
@@ -79,7 +79,8 @@ def evaluate(
     for dup, original in pairs:
         p = position[dup]
         scores = vectors[:p] @ vectors[p]
-        top = np.argsort(-scores)[:3]
+        k = min(3, p)
+        top = np.argpartition(-scores, k - 1)[:k]
         hit_scores.append(float(scores[position[original]]) if position[original] in top else None)
 
     eligible = [i for i, n in enumerate(numbers) if i > 0 and int(n) not in duplicates]
@@ -147,13 +148,12 @@ class LLMResult:
 
 
 def _top_candidates(store: Store, numbers: np.ndarray, vectors: np.ndarray, p: int, threshold: float) -> list[Candidate]:
-    scores = vectors[:p] @ vectors[p]
     found = []
-    for j in np.argsort(-scores)[:3]:
-        if scores[j] < threshold:
-            break
+    for j, score in ranked(vectors[:p] @ vectors[p], threshold):
         issue = store.issue(int(numbers[j]))
-        found.append(Candidate(issue["number"], issue["title"], issue["html_url"], issue["state"], float(scores[j])))
+        found.append(Candidate(issue["number"], issue["title"], issue["html_url"], issue["state"], score))
+        if len(found) == 3:
+            break
     return found
 
 
@@ -175,7 +175,7 @@ def evaluate_with_llm(
             break
         candidates = _top_candidates(store, numbers, vectors, position[dup], threshold)
         pairs_checked += 1
-        if candidates and any(c.number == original for c in confirmer.confirm(store.issue(dup), candidates, store.issue)):
+        if any(c.number == original for c in confirmer.confirm(store.issue(dup), candidates, store.issue)):
             hits += 1
     flags = samples_checked = 0
     for p in sample:
@@ -183,7 +183,7 @@ def evaluate_with_llm(
             break
         candidates = _top_candidates(store, numbers, vectors, p, threshold)
         samples_checked += 1
-        if candidates and confirmer.confirm(store.issue(int(numbers[p])), candidates, store.issue):
+        if confirmer.confirm(store.issue(int(numbers[p])), candidates, store.issue):
             flags += 1
     return LLMResult(
         threshold,

@@ -21,6 +21,15 @@ class Embedder(Protocol):
 
     def embed(self, texts: list[str]) -> np.ndarray: ...
 
+    def usage_summary(self) -> str: ...
+
+
+def openai_client(base_url: str | None, api_key_env: str):
+    """Client for any OpenAI-compatible endpoint; local servers that need no key get a placeholder."""
+    from openai import OpenAI
+
+    return OpenAI(base_url=base_url, api_key=os.environ.get(api_key_env) or "not-needed")
+
 
 class LocalEmbedder:
     """Runs a small embedding model in-process with fastembed. Needs no API key."""
@@ -33,6 +42,9 @@ class LocalEmbedder:
         self.name = f"local:{model}"
         self._model = TextEmbedding(model_name=model)
 
+    def usage_summary(self) -> str:
+        return ""  # runs locally: nothing to pay for
+
     def embed(self, texts: list[str]) -> np.ndarray:
         return np.array(list(self._model.embed(texts)), dtype=np.float32)
 
@@ -41,12 +53,9 @@ class OpenAIEmbedder:
     """Any OpenAI-compatible embeddings endpoint (OpenAI, Ollama, vLLM, hosted open-weight providers)."""
 
     def __init__(self, model: str, base_url: str | None = None, api_key_env: str | None = None):
-        from openai import OpenAI
-
         self.name = f"openai:{model}"
         self._model = model
-        api_key = os.environ.get(api_key_env or "OPENAI_API_KEY") or "not-needed"
-        self._client = OpenAI(base_url=base_url, api_key=api_key)
+        self._client = openai_client(base_url, api_key_env or "OPENAI_API_KEY")
         self.texts = 0
         self.tokens = 0
 
@@ -74,7 +83,7 @@ def normalize(vectors) -> np.ndarray:
     return v / np.where(norms == 0, 1.0, norms)
 
 
-def embed_pending(store: Store, embedder: Embedder, batch_size: int = 64) -> int:
+def embed_pending(store: Store, embedder: Embedder, batch_size: int = 256) -> int:
     """Embed issues that are new or changed since they were last embedded with this model."""
     pending = store.pending_embeddings(embedder.name, issue_text)
     for start in range(0, len(pending), batch_size):

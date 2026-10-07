@@ -90,3 +90,10 @@ def test_confirmer_reports_token_usage():
     c.confirm(ISSUES[1], candidates(), ISSUES.get)
     assert (c.prompt_tokens, c.completion_tokens) == (20, 6)
     assert c.usage_summary() == "llm m: 2 calls, 20 prompt + 6 completion tokens"
+
+
+def test_confirm_stops_at_call_budget_and_falls_back_unconfirmed():
+    c = Confirmer(LLMConfig(base_url="http://x", model="m"), client=FakeClient("not json"), max_calls=1)
+    result = c.confirm(ISSUES[1], candidates(), ISSUES.get)
+    assert [x.number for x in result] == [2, 3]
+    assert c.calls == 1

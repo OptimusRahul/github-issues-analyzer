@@ -1,20 +1,11 @@
 from types import SimpleNamespace
 
 import numpy as np
-import pytest
 
 from tests.triage.helpers import WordHashEmbedder, gh_issue
 from triage.config import EmbeddingsConfig
 from triage.embed import OpenAIEmbedder, embed_pending, make_embedder, normalize
-from triage.store import Store
 from triage.text import issue_text, sanitize
-
-
-@pytest.fixture
-def store(tmp_path):
-    s = Store(tmp_path / "index.sqlite")
-    yield s
-    s.close()
 
 
 def test_issue_text_handles_missing_body():

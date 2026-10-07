@@ -4,18 +4,10 @@ import pytest
 
 from tests.triage.helpers import FakeGitHub, gh_comment, gh_issue
 from triage.github import GitHubError
-from triage.store import Store
 from triage.sync import IndexMismatch, sync_repo
 
 NOW = datetime(2026, 6, 1, tzinfo=timezone.utc)
 LATER = datetime(2026, 6, 2, tzinfo=timezone.utc)
-
-
-@pytest.fixture
-def store(tmp_path):
-    s = Store(tmp_path / "index.sqlite")
-    yield s
-    s.close()
 
 
 def issue_requests(fake):

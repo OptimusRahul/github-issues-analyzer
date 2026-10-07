@@ -1,7 +1,9 @@
 import pytest
 
 from tests.triage.helpers import FakeGitHub, WordHashEmbedder, gh_comment, gh_issue
+from tests.triage.test_llm import FakeClient
 from triage import cli
+from triage.llm import Confirmer
 
 ISSUES = [
     gh_issue(1, "App crashes when opening settings on Windows"),
@@ -97,9 +99,9 @@ def test_llm_call_limit_of_zero_disables_the_llm_in_dupes(fake, tmp_path, monkey
         "duplicates:\n  threshold: 0.5\nmodels:\n  llm:\n    base_url: http://x\n    model: m\nlimits:\n  max_llm_calls_per_run: 0\n"
     )
 
-    def no_llm(cfg):
-        raise AssertionError("LLM must not be created when the call limit is 0")
+    def confirmer_without_replies(cfg, max_calls=None):
+        return Confirmer(cfg, client=FakeClient(), max_calls=max_calls)  # any call would fail: no replies queued
 
-    monkeypatch.setattr(cli, "Confirmer", no_llm)
+    monkeypatch.setattr(cli, "Confirmer", confirmer_without_replies)
     assert cli.main(args(tmp_path, "dupes", "2")) == 0
     assert "Likely duplicates of #2:" in capsys.readouterr().out

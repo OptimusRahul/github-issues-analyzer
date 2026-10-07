@@ -17,6 +17,10 @@ TRANSIENT_STATUS = {502, 503, 504}
 class GitHubError(Exception):
     """A GitHub API call failed."""
 
+    def __init__(self, message: str, status: int | None = None):
+        super().__init__(message)
+        self.status = status
+
 
 class RepoNotFound(GitHubError):
     """The repository or issue does not exist, or the token cannot see it."""
@@ -96,7 +100,9 @@ class GitHubClient:
         if response.status_code == 404:
             raise RepoNotFound(f"Not found: {method} {url}")
         if response.status_code >= 400:
-            raise GitHubError(f"GitHub returned {response.status_code} for {method} {url}: {response.text[:200]}")
+            raise GitHubError(
+                f"GitHub returned {response.status_code} for {method} {url}: {response.text[:200]}", response.status_code
+            )
         return response
 
     def viewer_login(self) -> str:
@@ -104,7 +110,9 @@ class GitHubClient:
         if self._login is None:
             try:
                 self._login = self.request("GET", "/user").json()["login"].lower()
-            except GitHubError:
+            except GitHubError as e:
+                if e.status != 403:
+                    raise
                 self._login = "github-actions[bot]"
         return self._login
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Iterator
 
 import numpy as np
 
@@ -26,6 +27,13 @@ class NotInIndex(LookupError):
     """The issue is not in the index (a pull request, or not synced yet)."""
 
 
+def ranked(scores: np.ndarray, threshold: float) -> Iterator[tuple[int, float]]:
+    """Positions whose score is at least threshold, best first. Sorts only the hits, not the whole index."""
+    hits = np.flatnonzero(scores >= threshold)
+    for j in hits[np.argsort(-scores[hits], kind="stable")]:
+        yield int(j), float(scores[j])
+
+
 def find_candidates(
     store: Store, model: str, number: int, cfg: DuplicatesConfig, exclude_labels: list[str], now: datetime
 ) -> list[Candidate]:
@@ -38,10 +46,7 @@ def find_candidates(
     cutoff = iso(now - timedelta(days=cfg.closed_window_days))
     excluded = set(exclude_labels)
     found: list[Candidate] = []
-    for j in np.argsort(-scores, kind="stable"):
-        score = float(scores[j])
-        if score < cfg.threshold:
-            break
+    for j, score in ranked(scores, cfg.threshold):
         other = int(numbers[j])
         if other == number:
             continue

@@ -1,17 +1,9 @@
 import sqlite3
 
 import numpy as np
-import pytest
 
 from tests.triage.helpers import gh_comment, gh_issue
 from triage.store import Store
-
-
-@pytest.fixture
-def store(tmp_path):
-    s = Store(tmp_path / "index.sqlite")
-    yield s
-    s.close()
 
 
 def test_upsert_skips_pull_requests_and_updates_existing(store):
