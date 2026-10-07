@@ -42,14 +42,14 @@ def find_candidates(
     if hits.size == 0:
         raise NotInIndex(f"#{number} is not in the index: it may be a pull request, or it has not been synced yet")
     # ponytail: exact brute-force search; fine up to ~1M issues, add an ANN index only if latency demands it
-    scores = vectors @ vectors[hits[0]]
+    # Only issues created before the target can be what it duplicates (matrix is ordered by creation time).
+    position = int(hits[0])
+    scores = vectors[:position] @ vectors[position]
     cutoff = iso(now - timedelta(days=cfg.closed_window_days))
     excluded = set(exclude_labels)
     found: list[Candidate] = []
     for j, score in ranked(scores, cfg.threshold):
         other = int(numbers[j])
-        if other == number:
-            continue
         issue = store.issue(other)
         if issue["state"] == "closed" and (issue["closed_at"] or "") < cutoff:
             continue

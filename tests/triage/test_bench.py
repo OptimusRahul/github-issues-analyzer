@@ -122,3 +122,21 @@ def test_llm_evaluation_stops_at_call_budget(store):
     numbers, vectors = toy()
     result = evaluate_with_llm(store, numbers, vectors, [(4, 1)], sample=[5], threshold=0.70, confirmer=FakeConfirmer(set()), max_calls=0)
     assert result.calls == 0 and result.pairs_checked == 0
+
+
+def test_ground_truth_fetches_comments_when_stored_ones_lack_the_reference(store):
+    store.upsert_issues([
+        gh_issue(1, created="2026-01-01T00:00:00Z"),
+        gh_issue(2, created="2026-01-02T00:00:00Z", state="closed", labels=["duplicate"]),
+    ])
+    store.upsert_comments([gh_comment(10, 2, "still happening for me")])
+    assert ground_truth(store, lambda number: [{"body": "Duplicate of #1"}], max_pairs=10) == [(2, 1)]
+
+
+def test_llm_evaluation_skips_pairs_without_embeddings(store):
+    store.upsert_issues([gh_issue(n, f"issue {n}", created=f"2026-01-0{n}T00:00:00Z") for n in range(1, 7)])
+    numbers, vectors = toy()
+    result = evaluate_with_llm(
+        store, numbers, vectors, [(77, 1), (4, 1)], sample=[], threshold=0.70, confirmer=FakeConfirmer({(4, 1)}), max_calls=10
+    )
+    assert (result.pairs_checked, result.recall) == (1, 1.0)

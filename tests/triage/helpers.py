@@ -93,6 +93,7 @@ class FakeGitHub:
         self.issue_comments: dict[int, list[dict]] = {}
         self.labels: dict[int, list[str]] = {}
         self.login = "triage-bot"
+        self.user_forbidden = False  # True mimics GitHub App / Actions tokens, which cannot read /user
         self.on_request = None
         self._next_id = 1000
 
@@ -128,6 +129,8 @@ class FakeGitHub:
         path, method = request.url.path, request.method
         base = f"/repos/{self.repo}"
         if path == "/user":
+            if self.user_forbidden:
+                return httpx.Response(403, json={"message": "Resource not accessible by integration"})
             return httpx.Response(200, json={"login": self.login})
         if path == base:
             return httpx.Response(200, json={"full_name": self.repo})
@@ -141,7 +144,7 @@ class FakeGitHub:
             if method == "GET":
                 return httpx.Response(200, json=self.issue_comments.get(number, []))
             self._next_id += 1
-            comment = {"id": self._next_id, "body": json.loads(request.content)["body"], "user": {"login": self.login}}
+            comment = {"id": self._next_id, "body": json.loads(request.content)["body"], "user": {"login": self.login, "type": "Bot" if self.user_forbidden else "User"}}
             self.issue_comments.setdefault(number, []).append(comment)
             return httpx.Response(201, json=comment)
         match = re.fullmatch(rf"{base}/issues/comments/(\d+)", path)

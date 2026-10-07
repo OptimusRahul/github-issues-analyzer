@@ -143,9 +143,9 @@ def test_retries_bad_gateway():
     assert sleeps == [1.0]
 
 
-def test_viewer_login_falls_back_to_actions_bot_only_on_403():
+def test_viewer_login_is_unknown_when_token_cannot_read_user():
     client = make_client(lambda request: httpx.Response(403, json={"message": "Resource not accessible by integration"}))
-    assert client.viewer_login() == "github-actions[bot]"
+    assert client.viewer_login() is None
 
 
 def test_viewer_login_does_not_hide_other_errors():
@@ -154,3 +154,27 @@ def test_viewer_login_does_not_hide_other_errors():
 
     with pytest.raises(GitHubError, match="Network error"):
         make_client(handler, sleep=lambda s: None).viewer_login()
+
+
+def test_writes_are_not_retried_after_bad_gateway():
+    calls = []
+
+    def handler(request):
+        calls.append(1)
+        return httpx.Response(502)
+
+    with pytest.raises(GitHubError, match="502"):
+        make_client(handler, sleep=lambda s: pytest.fail("must not retry a write")).create_comment("o/r", 1, "hi")
+    assert len(calls) == 1
+
+
+def test_writes_are_not_retried_after_network_error():
+    calls = []
+
+    def handler(request):
+        calls.append(1)
+        raise httpx.ReadTimeout("slow", request=request)
+
+    with pytest.raises(GitHubError, match="Network error"):
+        make_client(handler, sleep=lambda s: pytest.fail("must not retry a write")).update_comment("o/r", 5, "x")
+    assert len(calls) == 1

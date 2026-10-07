@@ -20,15 +20,19 @@ def render_comment(candidates: list[Candidate]) -> str:
     return "\n".join(lines)
 
 
+def _is_own(comment: dict, me: str | None) -> bool:
+    if MARKER not in (comment.get("body") or ""):
+        return False
+    user = comment.get("user") or {}
+    if me is not None:
+        return (user.get("login") or "").lower() == me
+    # App and Actions tokens cannot look up their login; they post as a Bot account, which no person can be.
+    return user.get("type") == "Bot"
+
+
 def post_or_update(gh: GitHubClient, repo: str, number: int, body: str, label: str | None) -> str:
     me = gh.viewer_login()
-    existing = next(
-        (
-            c for c in gh.issue_comments(repo, number)
-            if MARKER in (c.get("body") or "") and ((c.get("user") or {}).get("login") or "").lower() == me
-        ),
-        None,
-    )
+    existing = next((c for c in gh.issue_comments(repo, number) if _is_own(c, me)), None)
     if existing:
         gh.update_comment(repo, existing["id"], body)
         action = "updated"

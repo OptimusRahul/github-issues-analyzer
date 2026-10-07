@@ -57,6 +57,7 @@ class GitHubClient:
         )
         self.sleep, self.clock, self.max_wait = sleep, clock, max_wait
         self._login: str | None = None
+        self._login_checked = False
 
     def close(self) -> None:
         self.http.close()
@@ -71,15 +72,17 @@ class GitHubClient:
         return None
 
     def _send(self, method: str, url: str, **kwargs) -> httpx.Response:
-        """One request, retried with backoff on network errors and 502/503/504."""
-        for attempt in range(MAX_TRANSIENT_RETRIES + 1):
+        """One request. Reads are retried with backoff on network errors and 502/503/504; writes are not,
+        because GitHub may have applied a write that still reports an error (a retry would post twice)."""
+        retries = MAX_TRANSIENT_RETRIES if method == "GET" else 0
+        for attempt in range(retries + 1):
             try:
                 response = self.http.request(method, url, **kwargs)
             except httpx.TransportError as e:
-                if attempt == MAX_TRANSIENT_RETRIES:
+                if attempt == retries:
                     raise GitHubError(f"Network error for {method} {url}: {e}") from e
             else:
-                if response.status_code not in TRANSIENT_STATUS or attempt == MAX_TRANSIENT_RETRIES:
+                if response.status_code not in TRANSIENT_STATUS or attempt == retries:
                     return response
             self.sleep(2.0**attempt)
         raise AssertionError("unreachable")
@@ -105,15 +108,16 @@ class GitHubClient:
             )
         return response
 
-    def viewer_login(self) -> str:
-        """Login the token acts as. Actions' GITHUB_TOKEN cannot read /user and always posts as github-actions[bot]."""
-        if self._login is None:
+    def viewer_login(self) -> str | None:
+        """Login the token acts as, or None for GitHub App and Actions tokens, which cannot read /user."""
+        if not self._login_checked:
             try:
                 self._login = self.request("GET", "/user").json()["login"].lower()
             except GitHubError as e:
                 if e.status != 403:
                     raise
-                self._login = "github-actions[bot]"
+                self._login = None
+            self._login_checked = True
         return self._login
 
     def resolve_repo(self, full_name: str) -> str:

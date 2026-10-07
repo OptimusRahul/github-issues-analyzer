@@ -21,7 +21,7 @@ def index(store, issues):
 def base_issues(**third):
     return [
         gh_issue(1, "App crashes when opening settings on Windows"),
-        gh_issue(2, "Crash when opening settings on Windows 11"),
+        gh_issue(2, "Crash when opening settings on Windows 11", created="2026-01-09T00:00:00Z"),
         gh_issue(3, "Settings crash on Windows", **third),
         gh_issue(4, "Add dark theme to editor"),
     ]
@@ -62,3 +62,8 @@ def test_missing_issue_raises_clear_error(store):
     model = index(store, base_issues())
     with pytest.raises(NotInIndex, match="#99"):
         find_candidates(store, model, 99, CFG, [], NOW)
+
+
+def test_only_issues_created_before_the_target_are_candidates(store):
+    model = index(store, base_issues())
+    assert find_candidates(store, model, 1, CFG, [], NOW) == []

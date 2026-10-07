@@ -39,3 +39,14 @@ def test_post_never_edits_another_users_comment_that_contains_the_marker():
     assert post_or_update(fake.client(), "o/r", 7, f"{MARKER}\nreal", None) == "created"
     assert fake.issue_comments[7][0]["body"] == f"{MARKER}\nspoofed"
     assert len(fake.issue_comments[7]) == 2
+
+
+def test_app_token_updates_its_own_bot_comment_but_not_a_humans():
+    fake = FakeGitHub()
+    fake.user_forbidden = True
+    fake.issue_comments[7] = [
+        {"id": 1, "body": f"{MARKER}\nspoofed", "user": {"login": "mallory", "type": "User"}},
+        {"id": 2, "body": f"{MARKER}\nold", "user": {"login": "my-app[bot]", "type": "Bot"}},
+    ]
+    assert post_or_update(fake.client(), "o/r", 7, f"{MARKER}\nnew", None) == "updated"
+    assert [c["body"] for c in fake.issue_comments[7]] == [f"{MARKER}\nspoofed", f"{MARKER}\nnew"]

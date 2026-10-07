@@ -40,8 +40,11 @@ def ground_truth(store: Store, fetch_comments: Callable[[int], list[dict]], max_
             break
         if not is_closed_duplicate(issue):
             continue
-        comments = store.comments_for(issue["number"]) or fetch_comments(issue["number"])
-        original_number = find_original([c["body"] for c in comments] + [issue["body"]])
+        # The index only holds recent comments, so fetch the full thread when they lack the reference.
+        texts = [c["body"] for c in store.comments_for(issue["number"])] + [issue["body"]]
+        original_number = find_original(texts)
+        if original_number is None:
+            original_number = find_original([c["body"] for c in fetch_comments(issue["number"])])
         original = store.issue(original_number) if original_number else None
         if original and original_number != issue["number"] and original["created_at"] < issue["created_at"]:
             pairs.append((issue["number"], original_number))
@@ -169,9 +172,10 @@ def evaluate_with_llm(
 ) -> LLMResult:
     """Re-run pairs and the non-duplicate sample with LLM confirmation, spending at most max_calls (half each)."""
     position = {int(n): i for i, n in enumerate(numbers)}
+    pairs = [(d, o) for d, o in pairs if d in position and o in position]
     hits = pairs_checked = 0
     for dup, original in pairs:
-        if confirmer.calls >= max_calls // 2 or dup not in position:
+        if confirmer.calls >= max_calls // 2:
             break
         candidates = _top_candidates(store, numbers, vectors, position[dup], threshold)
         pairs_checked += 1
