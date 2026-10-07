@@ -16,3 +16,19 @@ jobs:
       - run: uv sync
       - run: uvx ruff check triage tests
       - run: uv run pytest tests/triage
+
+  action:
+    # Runs the composite action from this checkout, in dry run, against this repository's issues.
+    runs-on: ubuntu-latest
+    permissions:
+      issues: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          command: dupes
+          issue-number: "26"
+      - uses: ./
+        with:
+          command: digest
