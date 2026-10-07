@@ -1,0 +1,26 @@
+name: issue-triage
+
+# Runs this repository's own action on its own issues, in dry run (results go to the job summary).
+on:
+  issues:
+    types: [opened]
+  schedule:
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: issue-triage
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          command: ${{ github.event_name == 'issues' && 'dupes' || 'digest' }}

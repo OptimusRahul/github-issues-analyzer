@@ -9,17 +9,20 @@ from contextlib import ExitStack
 from datetime import datetime, timezone
 from pathlib import Path
 
+from triage.ask import AskError, ask
 from triage.bench import evaluate, evaluate_with_llm, ground_truth, render_report
 from triage.commands import DupesOutcome, check_duplicates
 from triage.config import ConfigError, load_config
+from triage.digest import build_digest, render_digest
 from triage.dupes import NotInIndex
 from triage.embed import SetupError, embed_pending, make_embedder
 from triage.github import GitHubClient, GitHubError
-from triage.llm import Confirmer
+from triage.llm import ChatModel, Confirmer
+from triage.search import Hit, hybrid_search
 from triage.store import Store
 from triage.sync import IndexMismatch, sync_repo
 
-EXPECTED_ERRORS = (ConfigError, GitHubError, NotInIndex, IndexMismatch, SetupError)
+EXPECTED_ERRORS = (ConfigError, GitHubError, NotInIndex, IndexMismatch, SetupError, AskError)
 
 ACTION_TEXT = {
     "dry-run": "Dry run: nothing posted. Set dry_run: false to post comments.",
@@ -41,6 +44,15 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("sync", help="fetch new and updated issues and comments")
     dupes = commands.add_parser("dupes", help="find likely duplicates of an issue")
     dupes.add_argument("number", type=int)
+    search = commands.add_parser("search", help="search issues by keywords and meaning")
+    search.add_argument("query")
+    search.add_argument("--state", choices=["open", "closed"])
+    search.add_argument("--label", action="append", help="require this label (repeatable)")
+    search.add_argument("--since", help="only issues created on or after this date (YYYY-MM-DD)")
+    search.add_argument("--limit", type=int, default=10)
+    commands.add_parser("digest", help="weekly digest of themes and issues needing attention")
+    ask_cmd = commands.add_parser("ask", help="answer a question about the issues, citing them (needs models.llm)")
+    ask_cmd.add_argument("question")
     bench = commands.add_parser("bench", help="measure duplicate detection against past duplicates")
     bench.add_argument("--max-pairs", type=int, default=1000, help="most recent duplicates to use")
     bench.add_argument("--sample", type=int, default=500, help="non-duplicate issues to check for false flags")
@@ -62,10 +74,35 @@ def format_outcome(number: int, outcome: DupesOutcome) -> str:
     return "\n".join(lines)
 
 
+def format_hits(hits: list[Hit]) -> str:
+    if not hits:
+        return "No matching issues."
+    return "\n".join(f"  #{h.number} ({h.state}) {h.title}\n      {h.html_url}" for h in hits)
+
+
 def usage_lines(*models) -> str:
     """Token usage of API-backed models (local models report nothing; they cost nothing)."""
     lines = [summary for m in models if m is not None and (summary := m.usage_summary())]
     return "\n".join(["Model usage:", *(f"  {line}" for line in lines)]) if lines else ""
+
+
+def _digest(cfg, gh, store, repo, now) -> None:
+    if not cfg.digest.enabled:
+        print("The digest is disabled in the config.")
+        return
+    embedder = make_embedder(cfg.models.embeddings)
+    llm = cfg.models.llm
+    namer = ChatModel(llm, max_calls=cfg.limits.max_llm_calls_per_run) if llm.enabled else None
+    sync_repo(gh, store, repo, now, cfg.comments_window_days)
+    embed_pending(store, embedder)
+    body = render_digest(repo, build_digest(store, embedder.name, cfg, now, namer), now)
+    if cfg.dry_run or cfg.digest.target == "none":
+        print(body)
+    else:
+        issue = gh.create_issue(repo, f"Triage digest – {now:%Y-%m-%d}", body)
+        print(f"Opened {issue['html_url']}")
+    if usage := usage_lines(embedder, namer):
+        print(usage)
 
 
 def _bench(args, cfg, gh, store, repo, now) -> None:
@@ -124,6 +161,28 @@ def _run(args: argparse.Namespace) -> int:
             outcome = check_duplicates(gh, store, embedder, cfg, repo, args.number, now, confirmer)
             print(format_outcome(args.number, outcome))
             if usage := usage_lines(embedder, confirmer):
+                print(usage)
+        elif args.command == "search":
+            embedder = make_embedder(cfg.models.embeddings)
+            sync_repo(gh, store, repo, now, cfg.comments_window_days)
+            embed_pending(store, embedder)
+            hits = hybrid_search(store, embedder, args.query, args.limit, args.state, args.label, args.since)
+            print(format_hits(hits))
+        elif args.command == "digest":
+            _digest(cfg, gh, store, repo, now)
+        elif args.command == "ask":
+            if not cfg.models.llm.enabled:
+                raise ConfigError("models.llm: ask needs models.llm.base_url and models.llm.model")
+            embedder = make_embedder(cfg.models.embeddings)
+            chat = ChatModel(cfg.models.llm, max_calls=cfg.limits.max_llm_calls_per_run)
+            sync_repo(gh, store, repo, now, cfg.comments_window_days)
+            embed_pending(store, embedder)
+            answer = ask(store, embedder, chat, args.question)
+            print(answer.text)
+            if answer.citations:
+                print("\nCited issues:")
+                print(format_hits(answer.citations))
+            if usage := usage_lines(embedder, chat):
                 print(usage)
         elif args.command == "bench":
             _bench(args, cfg, gh, store, repo, now)

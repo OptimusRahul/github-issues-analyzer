@@ -13,14 +13,14 @@ uv run main.py               # dev server on :8000 with reload; docs at /docs
 uvx ruff check triage tests  # lint (what CI runs); ruff is not in uv dev deps (config in pyproject)
 uv run pytest tests/triage                         # triage engine tests
 uv run pytest tests/triage/test_dupes.py::test_returns_similar_issues_above_threshold_best_first
-uv run triage -R owner/repo sync                   # CLI (also: dupes <n>, bench)
+uv run triage -R owner/repo sync                   # CLI (also: dupes <n>, search, ask, digest, bench)
 ```
 
 Local embeddings need `uv sync --extra local` (fastembed). Tests use fakes and never hit the network.
 
 ## Architecture
 
-`triage/` is the new engine and CLI (spec: `docs/superpowers/specs/2026-10-06-issue-triage-design.md`); `src/` is the legacy FastAPI app, rebuilt on the engine in v0.3.
+`action.yml` wraps the CLI as a GitHub Action (docs: `docs/github-action.md`). `triage/` is the new engine and CLI (spec: `docs/superpowers/specs/2026-10-06-issue-triage-design.md`); `src/` is the legacy FastAPI app, rebuilt on the engine in v0.3.
 
 The legacy FastAPI app has two endpoints, defined in `src/app.py`:
 

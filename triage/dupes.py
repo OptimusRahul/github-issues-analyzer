@@ -35,9 +35,16 @@ def ranked(scores: np.ndarray, threshold: float) -> Iterator[tuple[int, float]]:
 
 
 def find_candidates(
-    store: Store, model: str, number: int, cfg: DuplicatesConfig, exclude_labels: list[str], now: datetime
+    store: Store,
+    model: str,
+    number: int,
+    cfg: DuplicatesConfig,
+    exclude_labels: list[str],
+    now: datetime,
+    index: tuple[np.ndarray, np.ndarray] | None = None,
 ) -> list[Candidate]:
-    numbers, vectors = store.matrix(model)
+    """`index` is a preloaded `store.matrix(model)`, for callers checking many issues."""
+    numbers, vectors = index if index is not None else store.matrix(model)
     hits = np.flatnonzero(numbers == number)
     if hits.size == 0:
         raise NotInIndex(f"#{number} is not in the index: it may be a pull request, or it has not been synced yet")

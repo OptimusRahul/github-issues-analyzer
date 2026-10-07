@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any, Callable
@@ -49,6 +50,21 @@ CREATE TABLE IF NOT EXISTS state (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+"""
+
+# Full-text index over titles and bodies, kept in step with `issues` by triggers.
+KEYWORD_SCHEMA = """
+CREATE VIRTUAL TABLE IF NOT EXISTS issues_fts USING fts5(title, body, content='issues', content_rowid='number');
+CREATE TRIGGER IF NOT EXISTS issues_ai AFTER INSERT ON issues BEGIN
+    INSERT INTO issues_fts (rowid, title, body) VALUES (new.number, new.title, new.body);
+END;
+CREATE TRIGGER IF NOT EXISTS issues_ad AFTER DELETE ON issues BEGIN
+    INSERT INTO issues_fts (issues_fts, rowid, title, body) VALUES ('delete', old.number, old.title, old.body);
+END;
+CREATE TRIGGER IF NOT EXISTS issues_au AFTER UPDATE ON issues BEGIN
+    INSERT INTO issues_fts (issues_fts, rowid, title, body) VALUES ('delete', old.number, old.title, old.body);
+    INSERT INTO issues_fts (rowid, title, body) VALUES (new.number, new.title, new.body);
+END;
 """
 
 ISSUE_COLUMNS = (
@@ -104,6 +120,12 @@ class Store:
         for column, definition in ADDED_ISSUE_COLUMNS.items():
             if column not in existing:
                 self.conn.execute(f"ALTER TABLE issues ADD COLUMN {column} {definition}")
+        had_keyword_index = self.conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'issues_fts'"
+        ).fetchone()
+        self.conn.executescript(KEYWORD_SCHEMA)
+        if not had_keyword_index:
+            self.conn.execute("INSERT INTO issues_fts (issues_fts) VALUES ('rebuild')")
         self.conn.commit()
 
     def commit(self) -> None:
@@ -165,6 +187,36 @@ class Store:
     def comments_for(self, number: int) -> list[dict]:
         rows = self.conn.execute("SELECT * FROM comments WHERE issue_number = ? ORDER BY created_at, id", (number,))
         return [dict(r) for r in rows]
+
+    def keyword_search(self, query: str, limit: int = 100) -> list[int]:
+        """Issue numbers matching any word of the query, best bm25 rank first."""
+        words = re.findall(r"\w+", query)
+        if not words:
+            return []
+        match = " OR ".join(f'"{w}"' for w in words)  # quoted words: user text never becomes FTS syntax
+        rows = self.conn.execute(
+            "SELECT rowid FROM issues_fts WHERE issues_fts MATCH ? ORDER BY bm25(issues_fts) LIMIT ?", (match, limit)
+        )
+        return [r[0] for r in rows]
+
+    def filter_rows(self) -> list[tuple[int, str, list[str], str]]:
+        """Light rows for filtering: number, state, labels (decoded) and created_at."""
+        rows = self.conn.execute("SELECT number, state, labels, created_at FROM issues")
+        return [(r["number"], r["state"], json.loads(r["labels"]), r["created_at"]) for r in rows]
+
+    def maintainer_replied(self, associations: tuple[str, ...]) -> set[int]:
+        marks = ", ".join("?" for _ in associations)
+        rows = self.conn.execute(
+            f"SELECT DISTINCT issue_number FROM comments WHERE author_association IN ({marks})", associations
+        )
+        return {r[0] for r in rows}
+
+    def latest_comments(self) -> dict[int, tuple[str | None, str]]:
+        """Per issue: (author_association, created_at) of its most recent stored comment."""
+        latest: dict[int, tuple[str | None, str]] = {}
+        for r in self.conn.execute("SELECT issue_number, author_association, created_at FROM comments ORDER BY created_at, id"):
+            latest[r[0]] = (r[1], r[2])
+        return latest
 
     def count_issues(self) -> int:
         return self.conn.execute("SELECT COUNT(*) FROM issues").fetchone()[0]

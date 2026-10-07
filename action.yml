@@ -1,0 +1,64 @@
+name: Issue Triage
+description: Flag likely duplicate issues and post a weekly digest of themes. Runs on your own token and keys; dry run by default.
+branding:
+  icon: copy
+  color: green
+
+inputs:
+  command:
+    description: "dupes (check a newly opened issue) or digest (weekly summary)"
+    required: true
+  issue-number:
+    description: Issue to check for duplicates (dupes only)
+    default: ${{ github.event.issue.number }}
+  github-token:
+    description: Token used to read issues and post comments
+    default: ${{ github.token }}
+  config:
+    description: Path to the config file in the repository
+    default: .github/issue-triage.yml
+  llm-api-key:
+    description: Key for models.llm or an API embedding model (optional; local embeddings need no key)
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v6
+      with:
+        enable-cache: true
+        cache-dependency-glob: ${{ github.action_path }}/uv.lock
+
+    - name: Restore index and embedding model
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          ${{ runner.temp }}/triage-index
+          ${{ runner.temp }}/fastembed
+        key: issue-triage-${{ github.repository_id }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: issue-triage-${{ github.repository_id }}-
+
+    - name: Run issue triage
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        TRIAGE_LLM_KEY: ${{ inputs.llm-api-key }}
+        OPENAI_API_KEY: ${{ inputs.llm-api-key }}
+        TRIAGE_INDEX_DIR: ${{ runner.temp }}/triage-index
+        FASTEMBED_CACHE_PATH: ${{ runner.temp }}/fastembed
+        TRIAGE_COMMAND: ${{ inputs.command }}
+        TRIAGE_ISSUE: ${{ inputs.issue-number }}
+        TRIAGE_CONFIG: ${{ inputs.config }}
+      run: |
+        args=(--repo "$GITHUB_REPOSITORY" --config "$TRIAGE_CONFIG" "$TRIAGE_COMMAND")
+        if [ "$TRIAGE_COMMAND" = "dupes" ]; then args+=("$TRIAGE_ISSUE"); fi
+        uv run --quiet --project "$GITHUB_ACTION_PATH" --extra local triage "${args[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+    - name: Save index and embedding model
+      if: always()
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          ${{ runner.temp }}/triage-index
+          ${{ runner.temp }}/fastembed
+        key: issue-triage-${{ github.repository_id }}-${{ github.run_id }}-${{ github.run_attempt }}

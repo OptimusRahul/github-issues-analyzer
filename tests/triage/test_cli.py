@@ -3,7 +3,7 @@ import pytest
 from tests.triage.helpers import FakeGitHub, WordHashEmbedder, gh_comment, gh_issue
 from tests.triage.test_llm import FakeClient
 from triage import cli
-from triage.llm import Confirmer
+from triage.llm import ChatModel, Confirmer
 
 ISSUES = [
     gh_issue(1, "App crashes when opening settings on Windows"),
@@ -105,3 +105,47 @@ def test_llm_call_limit_of_zero_disables_the_llm_in_dupes(fake, tmp_path, monkey
     monkeypatch.setattr(cli, "Confirmer", confirmer_without_replies)
     assert cli.main(args(tmp_path, "dupes", "2")) == 0
     assert "Likely duplicates of #2:" in capsys.readouterr().out
+
+
+def test_search_prints_matching_issues(fake, tmp_path, capsys):
+    assert cli.main(args(tmp_path, "search", "settings on Windows", "--state", "open")) == 0
+    out = capsys.readouterr().out
+    assert "#1 (open)" in out and "https://github.com/o/r/issues/1" in out
+
+
+def test_search_with_no_match_says_so(fake, tmp_path, capsys):
+    assert cli.main(args(tmp_path, "search", "settings", "--label", "nonexistent")) == 0
+    assert "No matching issues." in capsys.readouterr().out
+
+
+def test_ask_prints_answer_and_cited_issues(fake, tmp_path, monkeypatch, capsys):
+    (tmp_path / "issue-triage.yml").write_text("models:\n  llm:\n    base_url: http://x\n    model: m\n")
+    reply = '{"answer": "Settings crash on Windows.", "citations": [1]}'
+    monkeypatch.setattr(cli, "ChatModel", lambda cfg, max_calls=None: ChatModel(cfg, client=FakeClient(reply)))
+    assert cli.main(args(tmp_path, "ask", "What crashes?")) == 0
+    out = capsys.readouterr().out
+    assert "Settings crash on Windows." in out and "#1" in out
+
+
+def test_ask_without_llm_config_is_an_error(fake, tmp_path, capsys):
+    assert cli.main(args(tmp_path, "ask", "What crashes?")) == 1
+    assert "models.llm" in capsys.readouterr().err
+
+
+def test_digest_dry_run_prints_without_posting(fake, tmp_path, capsys):
+    assert cli.main(args(tmp_path, "digest")) == 0
+    assert "# Triage digest" in capsys.readouterr().out
+    assert fake.created_issues == []
+
+
+def test_digest_opens_an_issue_when_dry_run_is_off(fake, tmp_path, capsys):
+    (tmp_path / "issue-triage.yml").write_text("dry_run: false\n")
+    assert cli.main(args(tmp_path, "digest")) == 0
+    assert fake.created_issues[0]["title"].startswith("Triage digest")
+    assert "https://github.com/o/r/issues/901" in capsys.readouterr().out
+
+
+def test_digest_target_none_never_posts(fake, tmp_path, capsys):
+    (tmp_path / "issue-triage.yml").write_text("dry_run: false\ndigest:\n  target: none\n")
+    assert cli.main(args(tmp_path, "digest")) == 0
+    assert fake.created_issues == []

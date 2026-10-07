@@ -24,6 +24,16 @@ class DuplicatesConfig:
 
 
 @dataclass
+class DigestConfig:
+    enabled: bool = True
+    target: str = "issue"  # issue | none (discussion: not supported yet)
+    window_days: int = 7
+    waiting_days: int = 14
+    theme_threshold: float = 0.75
+    min_theme_size: int = 3
+
+
+@dataclass
 class EmbeddingsConfig:
     provider: str = "local"  # local | openai
     model: str = "BAAI/bge-small-en-v1.5"
@@ -57,7 +67,7 @@ class LimitsConfig:
 class Config:
     dry_run: bool = True
     duplicates: DuplicatesConfig = field(default_factory=DuplicatesConfig)
-    digest: dict[str, Any] = field(default_factory=dict)  # read by the digest in v0.2
+    digest: DigestConfig = field(default_factory=DigestConfig)
     exclude_labels: list[str] = field(default_factory=list)
     comments_window_days: int = 180
     models: ModelsConfig = field(default_factory=ModelsConfig)
@@ -99,6 +109,12 @@ def _validate(cfg: Config) -> None:
         (is_int(dup.max_candidates) and 1 <= dup.max_candidates <= 10, "duplicates.max_candidates: must be an integer from 1 to 10"),
         (is_int(dup.closed_window_days) and dup.closed_window_days >= 0, "duplicates.closed_window_days: must be a non-negative integer"),
         (dup.label is None or isinstance(dup.label, str), "duplicates.label: must be text or null"),
+        (cfg.digest.target != "discussion", "digest.target: posting to discussion is not supported yet; use 'issue' or 'none'"),
+        (cfg.digest.target in ("issue", "none"), "digest.target: must be 'issue' or 'none'"),
+        (is_int(cfg.digest.window_days) and cfg.digest.window_days >= 1, "digest.window_days: must be a positive integer"),
+        (is_int(cfg.digest.waiting_days) and cfg.digest.waiting_days >= 1, "digest.waiting_days: must be a positive integer"),
+        (is_number(cfg.digest.theme_threshold) and 0 < cfg.digest.theme_threshold <= 1, "digest.theme_threshold: must be a number greater than 0 and at most 1"),
+        (is_int(cfg.digest.min_theme_size) and cfg.digest.min_theme_size >= 2, "digest.min_theme_size: must be an integer of at least 2"),
         (isinstance(cfg.exclude_labels, list), "exclude_labels: must be a list"),
         (is_int(cfg.comments_window_days) and cfg.comments_window_days >= 0, "comments_window_days: must be a non-negative integer"),
         (cfg.models.embeddings.provider in ("local", "openai"), "models.embeddings.provider: must be 'local' or 'openai'"),
