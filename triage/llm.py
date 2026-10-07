@@ -32,7 +32,9 @@ def build_prompt(issue: dict, candidates: list[dict]) -> str:
     )
 
 
-class Confirmer:
+class ChatModel:
+    """An OpenAI-compatible chat model that answers in JSON, with a call budget and token counts."""
+
     def __init__(self, cfg: LLMConfig, client=None, max_calls: int | None = None):
         self.client = client or openai_client(cfg.base_url, cfg.api_key_env)
         self.max_calls = max_calls
@@ -44,7 +46,8 @@ class Confirmer:
     def usage_summary(self) -> str:
         return f"llm {self.model}: {self.calls} calls, {self.prompt_tokens} prompt + {self.completion_tokens} completion tokens"
 
-    def _ask(self, prompt: str) -> dict | None:
+    def ask_json(self, system: str, prompt: str, valid: Callable[[dict], bool]) -> dict | None:
+        """A JSON object accepted by `valid`, retrying once; None if the model fails twice or the budget is spent."""
         for _ in range(2):
             if self.max_calls is not None and self.calls >= self.max_calls:
                 return None
@@ -53,7 +56,7 @@ class Confirmer:
                 model=self.model,
                 temperature=0,
                 response_format={"type": "json_object"},
-                messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
+                messages=[{"role": "system", "content": system}, {"role": "user", "content": prompt}],
             )
             usage = getattr(response, "usage", None)
             if usage is not None:
@@ -63,16 +66,19 @@ class Confirmer:
                 data = json.loads(response.choices[0].message.content or "")
             except json.JSONDecodeError:
                 continue
-            if isinstance(data, dict) and isinstance(data.get("duplicates"), list):
+            if isinstance(data, dict) and valid(data):
                 return data
         return None
 
+
+class Confirmer(ChatModel):
     def confirm(self, issue: dict, candidates: list[Candidate], lookup: Callable[[int], dict]) -> list[Candidate]:
         """Keep the candidates the model says are the same problem. Falls back to all candidates, without reasons,
         if the model never returns valid JSON or the call budget is spent."""
         if not candidates:
             return []
-        data = self._ask(build_prompt(issue, [lookup(c.number) for c in candidates]))
+        prompt = build_prompt(issue, [lookup(c.number) for c in candidates])
+        data = self.ask_json(SYSTEM_PROMPT, prompt, lambda d: isinstance(d.get("duplicates"), list))
         if data is None:
             return candidates
         by_number = {c.number: c for c in candidates}

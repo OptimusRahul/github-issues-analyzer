@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 
@@ -178,3 +180,14 @@ def test_writes_are_not_retried_after_network_error():
     with pytest.raises(GitHubError, match="Network error"):
         make_client(handler, sleep=lambda s: pytest.fail("must not retry a write")).update_comment("o/r", 5, "x")
     assert len(calls) == 1
+
+
+def test_create_issue_posts_title_and_body():
+    seen = []
+
+    def handler(request):
+        seen.append((request.method, request.url.path, json.loads(request.content)))
+        return httpx.Response(201, json={"number": 7, "html_url": "https://github.com/o/r/issues/7"})
+
+    assert make_client(handler).create_issue("o/r", "Digest", "body")["number"] == 7
+    assert seen == [("POST", "/repos/o/r/issues", {"title": "Digest", "body": "body"})]

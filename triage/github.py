@@ -145,5 +145,8 @@ class GitHubClient:
     def update_comment(self, repo: str, comment_id: int, body: str) -> dict:
         return self.request("PATCH", f"/repos/{repo}/issues/comments/{comment_id}", json={"body": body}).json()
 
+    def create_issue(self, repo: str, title: str, body: str) -> dict:
+        return self.request("POST", f"/repos/{repo}/issues", json={"title": title, "body": body}).json()
+
     def add_labels(self, repo: str, number: int, labels: list[str]) -> None:
         self.request("POST", f"/repos/{repo}/issues/{number}/labels", json={"labels": labels})

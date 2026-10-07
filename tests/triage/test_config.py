@@ -38,7 +38,7 @@ models:
     assert cfg.duplicates.threshold == 0.9
     assert cfg.duplicates.label is None
     assert cfg.exclude_labels == ["wontfix"]
-    assert cfg.digest == {"target": "issue"}
+    assert cfg.digest.target == "issue" and cfg.digest.waiting_days == 14
     assert cfg.models.llm.enabled is True
 
 
@@ -65,3 +65,13 @@ def test_invalid_yaml_is_a_config_error(tmp_path):
 def test_env_overrides_dry_run(monkeypatch):
     monkeypatch.setenv("TRIAGE_DRY_RUN", "false")
     assert load_config(None).dry_run is False
+
+
+def test_digest_to_discussions_is_rejected_until_supported(tmp_path):
+    with pytest.raises(ConfigError, match=r"digest\.target.*discussion"):
+        load_config(write(tmp_path, "digest:\n  target: discussion\n"))
+
+
+def test_unknown_digest_target_names_the_field(tmp_path):
+    with pytest.raises(ConfigError, match=r"digest\.target"):
+        load_config(write(tmp_path, "digest:\n  target: email\n"))
