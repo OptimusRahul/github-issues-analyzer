@@ -2,7 +2,7 @@ import json
 
 import numpy as np
 
-from tests.triage.test_llm import FakeClient
+from tests.triage.helpers import FakeClient
 from triage.config import LLMConfig
 from triage.llm import ChatModel
 from triage.themes import cluster, keywords, name_theme

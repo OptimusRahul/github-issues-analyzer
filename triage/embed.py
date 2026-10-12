@@ -52,15 +52,17 @@ class LocalEmbedder:
 class OpenAIEmbedder:
     """Any OpenAI-compatible embeddings endpoint (OpenAI, Ollama, vLLM, hosted open-weight providers)."""
 
-    def __init__(self, model: str, base_url: str | None = None, api_key_env: str | None = None):
+    def __init__(self, model: str, base_url: str | None = None, api_key_env: str | None = None, price: float = 0):
         self.name = f"openai:{model}"
+        self.price = price  # USD per 1M tokens
         self._model = model
         self._client = openai_client(base_url, api_key_env or "OPENAI_API_KEY")
         self.texts = 0
         self.tokens = 0
 
     def usage_summary(self) -> str:
-        return f"embeddings {self.name}: {self.texts} texts, {self.tokens} tokens"
+        cost = f", ${self.tokens * self.price / 1_000_000:.4f}" if self.price else ""
+        return f"embeddings {self.name}: {self.texts} texts, {self.tokens} tokens{cost}"
 
     def embed(self, texts: list[str]) -> np.ndarray:
         response = self._client.embeddings.create(model=self._model, input=texts)
@@ -74,7 +76,7 @@ class OpenAIEmbedder:
 def make_embedder(cfg: EmbeddingsConfig) -> Embedder:
     if cfg.provider == "local":
         return LocalEmbedder(cfg.model)
-    return OpenAIEmbedder(cfg.model, cfg.base_url, cfg.api_key_env)
+    return OpenAIEmbedder(cfg.model, cfg.base_url, cfg.api_key_env, cfg.price)
 
 
 def normalize(vectors) -> np.ndarray:

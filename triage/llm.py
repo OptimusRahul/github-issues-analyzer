@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import Callable
 
+import openai
+
 from triage.config import LLMConfig, is_int
 from triage.dupes import Candidate
 from triage.embed import openai_client
@@ -33,42 +35,86 @@ def build_prompt(issue: dict, candidates: list[dict]) -> str:
 
 
 class ChatModel:
-    """An OpenAI-compatible chat model that answers in JSON, with a call budget and token counts."""
+    """An OpenAI-compatible chat model that answers in JSON, with a call budget, token counts and cost.
+    Falls back to `cfg.fallback` when the model errors or keeps returning invalid JSON."""
 
-    def __init__(self, cfg: LLMConfig, client=None, max_calls: int | None = None):
+    def __init__(self, cfg: LLMConfig, client=None, max_calls: int | None = None, fallback_client=None, task: str | None = None):
+        self.cfg = cfg
         self.client = client or openai_client(cfg.base_url, cfg.api_key_env)
+        self.fallback_client = None
+        if cfg.fallback is not None:
+            self.fallback_client = fallback_client or openai_client(cfg.fallback.base_url, cfg.fallback.api_key_env)
         self.max_calls = max_calls
         self.model = cfg.model
+        self.task = task
         self.calls = 0
         self.prompt_tokens = 0
         self.completion_tokens = 0
+        self.cost = 0.0
+        self.used_fallback = False
+        self.json_mode = {}  # per client: False once the server rejected response_format
 
     def usage_summary(self) -> str:
-        return f"llm {self.model}: {self.calls} calls, {self.prompt_tokens} prompt + {self.completion_tokens} completion tokens"
+        task = f" ({self.task})" if self.task else ""
+        model = f"{self.model} + fallback {self.cfg.fallback.model}" if self.used_fallback else self.model
+        cost = f", ${self.cost:.4f}" if self.cost else ""
+        return (
+            f"llm {model}{task}: {self.calls} calls, "
+            f"{self.prompt_tokens} prompt + {self.completion_tokens} completion tokens{cost}"
+        )
 
     def ask_json(self, system: str, prompt: str, valid: Callable[[dict], bool]) -> dict | None:
-        """A JSON object accepted by `valid`, retrying once; None if the model fails twice or the budget is spent."""
-        for _ in range(2):
-            if self.max_calls is not None and self.calls >= self.max_calls:
-                return None
-            self.calls += 1
-            response = self.client.chat.completions.create(
-                model=self.model,
-                temperature=0,
-                response_format={"type": "json_object"},
-                messages=[{"role": "system", "content": system}, {"role": "user", "content": prompt}],
-            )
-            usage = getattr(response, "usage", None)
-            if usage is not None:
-                self.prompt_tokens += usage.prompt_tokens or 0
-                self.completion_tokens += usage.completion_tokens or 0
-            try:
-                data = json.loads(response.choices[0].message.content or "")
-            except json.JSONDecodeError:
-                continue
-            if isinstance(data, dict) and valid(data):
-                return data
+        """A JSON object accepted by `valid`, trying the model twice and then the fallback twice;
+        None if all fail or the call budget is spent."""
+        endpoints = [(self.client, self.cfg)]
+        if self.fallback_client is not None:
+            endpoints.append((self.fallback_client, self.cfg.fallback))
+        for client, cfg in endpoints:
+            self.used_fallback |= cfg is not self.cfg
+            for _ in range(2):
+                if self.max_calls is not None and self.calls >= self.max_calls:
+                    return None
+                try:
+                    content = self._call(client, cfg, system, prompt)
+                except openai.APIError:
+                    break  # unreachable or failing: move on to the fallback
+                data = _parse_json(content)
+                if data is not None and valid(data):
+                    return data
         return None
+
+    def _call(self, client, cfg: LLMConfig, system: str, prompt: str) -> str:
+        messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
+        kwargs = {"model": cfg.model, "temperature": 0, "messages": messages}
+        if self.json_mode.get(id(client), True):
+            kwargs["response_format"] = {"type": "json_object"}
+        self.calls += 1
+        try:
+            response = client.chat.completions.create(**kwargs)
+        except openai.BadRequestError as e:
+            if "response_format" not in kwargs or "response_format" not in str(e):
+                raise
+            self.json_mode[id(client)] = False  # e.g. some open-weight servers: ask for JSON in the prompt only
+            return self._call(client, cfg, system, prompt)
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            prompt_tokens, completion_tokens = usage.prompt_tokens or 0, usage.completion_tokens or 0
+            self.prompt_tokens += prompt_tokens
+            self.completion_tokens += completion_tokens
+            self.cost += (prompt_tokens * cfg.input_price + completion_tokens * cfg.output_price) / 1_000_000
+        return response.choices[0].message.content or ""
+
+
+def _parse_json(content: str) -> dict | None:
+    """The JSON object in a reply, also when the model wrapped it in prose or a code fence."""
+    start, end = content.find("{"), content.rfind("}")
+    if start == -1 or end < start:
+        return None
+    try:
+        data = json.loads(content[start : end + 1])
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
 
 
 class Confirmer(ChatModel):

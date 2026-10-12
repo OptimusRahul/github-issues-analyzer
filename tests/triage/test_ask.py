@@ -2,8 +2,7 @@ import json
 
 import pytest
 
-from tests.triage.helpers import WordHashEmbedder, gh_issue
-from tests.triage.test_llm import FakeClient
+from tests.triage.helpers import FakeClient, WordHashEmbedder, gh_issue
 from triage.ask import SYSTEM_PROMPT, AskError, ask
 from triage.config import LLMConfig
 from triage.embed import embed_pending

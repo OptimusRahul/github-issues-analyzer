@@ -1,7 +1,6 @@
 import pytest
 
-from tests.triage.helpers import FakeGitHub, WordHashEmbedder, gh_comment, gh_issue
-from tests.triage.test_llm import FakeClient
+from tests.triage.helpers import FakeClient, FakeGitHub, WordHashEmbedder, gh_comment, gh_issue
 from triage import cli
 from triage.llm import ChatModel, Confirmer
 
@@ -99,7 +98,7 @@ def test_llm_call_limit_of_zero_disables_the_llm_in_dupes(fake, tmp_path, monkey
         "duplicates:\n  threshold: 0.5\nmodels:\n  llm:\n    base_url: http://x\n    model: m\nlimits:\n  max_llm_calls_per_run: 0\n"
     )
 
-    def confirmer_without_replies(cfg, max_calls=None):
+    def confirmer_without_replies(cfg, max_calls=None, task=None):
         return Confirmer(cfg, client=FakeClient(), max_calls=max_calls)  # any call would fail: no replies queued
 
     monkeypatch.setattr(cli, "Confirmer", confirmer_without_replies)
@@ -121,7 +120,7 @@ def test_search_with_no_match_says_so(fake, tmp_path, capsys):
 def test_ask_prints_answer_and_cited_issues(fake, tmp_path, monkeypatch, capsys):
     (tmp_path / "issue-triage.yml").write_text("models:\n  llm:\n    base_url: http://x\n    model: m\n")
     reply = '{"answer": "Settings crash on Windows.", "citations": [1]}'
-    monkeypatch.setattr(cli, "ChatModel", lambda cfg, max_calls=None: ChatModel(cfg, client=FakeClient(reply)))
+    monkeypatch.setattr(cli, "ChatModel", lambda cfg, **kw: ChatModel(cfg, client=FakeClient(reply)))
     assert cli.main(args(tmp_path, "ask", "What crashes?")) == 0
     out = capsys.readouterr().out
     assert "Settings crash on Windows." in out and "#1" in out
@@ -149,3 +148,15 @@ def test_digest_target_none_never_posts(fake, tmp_path, capsys):
     (tmp_path / "issue-triage.yml").write_text("dry_run: false\ndigest:\n  target: none\n")
     assert cli.main(args(tmp_path, "digest")) == 0
     assert fake.created_issues == []
+
+
+def test_chat_for_uses_task_model_and_names_the_task(tmp_path):
+    from triage.cli import chat_for
+    from triage.config import load_config
+
+    path = tmp_path / "c.yml"
+    path.write_text("models:\n  llm: {base_url: http://x, model: small}\n  ask: {base_url: http://y, model: big}\n")
+    cfg = load_config(path)
+    assert chat_for(cfg, "ask").model == "big" and chat_for(cfg, "ask").task == "ask"
+    assert chat_for(cfg, "confirm").model == "small"
+    assert chat_for(load_config(None), "ask") is None

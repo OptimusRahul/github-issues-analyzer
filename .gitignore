@@ -56,3 +56,4 @@ github_issues.db
 .mypy_cache/
 # triage index files
 .triage/
+.triage-openai/

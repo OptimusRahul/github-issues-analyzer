@@ -80,3 +80,19 @@ def test_openai_embedder_reports_token_usage():
     embedder.embed(["a"])
     embedder.embed(["b"])
     assert embedder.usage_summary() == "embeddings openai:m: 2 texts, 14 tokens"
+
+
+def test_switching_embedding_model_never_mixes_vectors(store):
+    store.upsert_issues([gh_issue(1, "a"), gh_issue(2, "b")])
+    store.save_embeddings("old", [(1, "h1", np.ones(3)), (2, "h2", np.ones(3))])
+    store.save_embeddings("new", [(1, "h1n", np.zeros(3))])
+    numbers, _ = store.matrix("new")
+    assert list(numbers) == [1]
+    numbers, _ = store.matrix("old")
+    assert list(numbers) == [2]
+
+
+def test_openai_embedder_reports_cost_when_priced():
+    e = OpenAIEmbedder("m", price=0.02)
+    e.tokens = 2_000_000
+    assert e.usage_summary().endswith("2000000 tokens, $0.0400")

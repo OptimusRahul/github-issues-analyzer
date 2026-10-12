@@ -86,13 +86,20 @@ def usage_lines(*models) -> str:
     return "\n".join(["Model usage:", *(f"  {line}" for line in lines)]) if lines else ""
 
 
+def chat_for(cfg, task: str, cls=None):
+    """The chat model configured for a task (models.<task>, else models.llm), or None if none is set."""
+    llm = cfg.models.llm_for(task)
+    if not llm.enabled:
+        return None
+    return (cls or ChatModel)(llm, max_calls=cfg.limits.max_llm_calls_per_run, task=task)
+
+
 def _digest(cfg, gh, store, repo, now) -> None:
     if not cfg.digest.enabled:
         print("The digest is disabled in the config.")
         return
     embedder = make_embedder(cfg.models.embeddings)
-    llm = cfg.models.llm
-    namer = ChatModel(llm, max_calls=cfg.limits.max_llm_calls_per_run) if llm.enabled else None
+    namer = chat_for(cfg, "themes")
     sync_repo(gh, store, repo, now, cfg.comments_window_days)
     embed_pending(store, embedder)
     body = render_digest(repo, build_digest(store, embedder.name, cfg, now, namer), now)
@@ -106,8 +113,8 @@ def _digest(cfg, gh, store, repo, now) -> None:
 
 
 def _bench(args, cfg, gh, store, repo, now) -> None:
-    if args.llm and not cfg.models.llm.enabled:
-        raise ConfigError("models.llm: --llm needs models.llm.base_url and models.llm.model")
+    if args.llm and not cfg.models.llm_for("confirm").enabled:
+        raise ConfigError("models.llm: --llm needs models.llm (or models.confirm) base_url and model")
     sync_repo(gh, store, repo, now, cfg.comments_window_days)
     embedder = make_embedder(cfg.models.embeddings)
     embed_pending(store, embedder)
@@ -122,7 +129,7 @@ def _bench(args, cfg, gh, store, repo, now) -> None:
     numbers, vectors = store.matrix(embedder.name)
     result = evaluate(numbers, vectors, pairs, embedder.name, sample_size=args.sample)
     llm_result = None
-    confirmer = Confirmer(cfg.models.llm, max_calls=cfg.limits.max_llm_calls_per_run) if args.llm else None
+    confirmer = chat_for(cfg, "confirm", Confirmer) if args.llm else None
     if confirmer is not None:
         threshold = result.recommended.threshold if result.recommended else cfg.duplicates.threshold
         llm_result = evaluate_with_llm(
@@ -156,8 +163,7 @@ def _run(args: argparse.Namespace) -> int:
             )
         elif args.command == "dupes":
             embedder = make_embedder(cfg.models.embeddings)
-            llm = cfg.models.llm
-            confirmer = Confirmer(llm, max_calls=cfg.limits.max_llm_calls_per_run) if llm.enabled else None
+            confirmer = chat_for(cfg, "confirm", Confirmer)
             outcome = check_duplicates(gh, store, embedder, cfg, repo, args.number, now, confirmer)
             print(format_outcome(args.number, outcome))
             if usage := usage_lines(embedder, confirmer):
@@ -168,13 +174,15 @@ def _run(args: argparse.Namespace) -> int:
             embed_pending(store, embedder)
             hits = hybrid_search(store, embedder, args.query, args.limit, args.state, args.label, args.since)
             print(format_hits(hits))
+            if usage := usage_lines(embedder):
+                print(usage)
         elif args.command == "digest":
             _digest(cfg, gh, store, repo, now)
         elif args.command == "ask":
-            if not cfg.models.llm.enabled:
-                raise ConfigError("models.llm: ask needs models.llm.base_url and models.llm.model")
+            chat = chat_for(cfg, "ask")
+            if chat is None:
+                raise ConfigError("models.llm: ask needs models.llm (or models.ask) base_url and model")
             embedder = make_embedder(cfg.models.embeddings)
-            chat = ChatModel(cfg.models.llm, max_calls=cfg.limits.max_llm_calls_per_run)
             sync_repo(gh, store, repo, now, cfg.comments_window_days)
             embed_pending(store, embedder)
             answer = ask(store, embedder, chat, args.question)

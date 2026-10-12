@@ -4,8 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from tests.triage.helpers import FakeGitHub, WordHashEmbedder, gh_issue
-from tests.triage.test_llm import FakeClient
+from tests.triage.helpers import FakeClient, FakeGitHub, WordHashEmbedder, gh_issue
 from triage.commands import check_duplicates
 from triage.config import Config, DuplicatesConfig, LLMConfig
 from triage.dupes import NotInIndex

@@ -75,3 +75,30 @@ def test_digest_to_discussions_is_rejected_until_supported(tmp_path):
 def test_unknown_digest_target_names_the_field(tmp_path):
     with pytest.raises(ConfigError, match=r"digest\.target"):
         load_config(write(tmp_path, "digest:\n  target: email\n"))
+
+
+def test_task_model_overrides_default_llm(tmp_path):
+    cfg = load_config(write(tmp_path, """
+models:
+  llm: {base_url: http://localhost:11434/v1, model: small}
+  ask:
+    base_url: https://api.openai.com/v1
+    model: big
+    input_price: 2.5
+    fallback: {base_url: http://localhost:11434/v1, model: medium}
+"""))
+    assert cfg.models.llm_for("confirm").model == "small"
+    assert cfg.models.llm_for("themes").model == "small"
+    ask = cfg.models.llm_for("ask")
+    assert (ask.model, ask.input_price, ask.output_price) == ("big", 2.5, 0)
+    assert ask.fallback.model == "medium" and ask.fallback.api_key_env == "TRIAGE_LLM_KEY"
+
+
+def test_negative_price_names_the_field(tmp_path):
+    with pytest.raises(ConfigError, match="models.confirm.output_price"):
+        load_config(write(tmp_path, "models:\n  confirm: {base_url: http://x, model: m, output_price: -1}\n"))
+
+
+def test_unknown_key_inside_fallback_names_the_field(tmp_path):
+    with pytest.raises(ConfigError, match="models.llm.fallback.modle"):
+        load_config(write(tmp_path, "models:\n  llm: {base_url: http://x, model: m, fallback: {modle: x}}\n"))

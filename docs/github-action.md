@@ -53,6 +53,35 @@ models:
   llm: { base_url: https://api.openai.com/v1, model: your-model-name, api_key_env: TRIAGE_LLM_KEY }
 ```
 
+## Models
+
+Every model is an OpenAI-compatible endpoint: OpenAI, Ollama, vLLM, llama.cpp server or a hosted open-weight provider. `models.llm` is the default for every task. Set `models.confirm` (duplicate confirmation), `models.ask` or `models.themes` (digest theme names) to use a different model for one task.
+
+```yaml
+models:
+  embeddings: { provider: openai, model: text-embedding-3-small, price: 0.02 }  # price: USD per 1M tokens
+  llm:                                  # cheap open model for confirmation and theme names
+    base_url: http://localhost:11434/v1
+    model: qwen2.5:7b
+    api_key_env: TRIAGE_LLM_KEY
+  ask:                                  # a stronger model only for answers
+    base_url: https://api.openai.com/v1
+    model: your-model-name
+    api_key_env: OPENAI_API_KEY
+    input_price: 2.5                    # USD per 1M prompt tokens, for the usage report
+    output_price: 10
+    fallback: { base_url: http://localhost:11434/v1, model: qwen2.5:7b }
+```
+
+- If a server rejects JSON mode (`response_format`), the request is repeated without it and the JSON object is read from the reply.
+- If a model is unreachable or returns invalid JSON twice, its `fallback` is tried. Both count toward `limits.max_llm_calls_per_run`.
+- Each command prints the calls, tokens and cost per model and task.
+- Changing the embedding model re-embeds every issue on the next run; vectors from different models are never compared.
+
+### Everything on your own machine
+
+Run [Ollama](https://ollama.com), pull a chat model (`ollama pull qwen2.5:7b`), and point `models.llm` at `http://localhost:11434/v1` as above. Keep `embeddings: { provider: local }` (needs `uv sync --extra local`). No API key or paid service is needed. Run `triage bench --llm` to check a model on your repository before you enable it.
+
 ## How it works
 
 - The index of your issues lives in the Actions cache. Each run restores the latest copy, syncs only what changed, and saves a new copy. If the cache was evicted (unused for 7 days), the run rebuilds it; with local embeddings this only costs time.

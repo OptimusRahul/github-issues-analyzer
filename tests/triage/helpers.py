@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import zlib
+from types import SimpleNamespace
 
 import httpx
 import numpy as np
@@ -166,3 +167,20 @@ class FakeGitHub:
             self.labels.setdefault(int(match.group(1)), []).extend(labels)
             return httpx.Response(200, json=[{"name": name} for name in labels])
         return httpx.Response(404, json={"message": "Not Found"})
+
+
+class FakeClient:
+    """Stands in for openai.OpenAI: client.chat.completions.create(...). A reply that is an exception is raised."""
+
+    def __init__(self, *replies):
+        self.replies = list(replies)
+        self.calls = []
+        self.usage = None
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self.create))
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        reply = self.replies.pop(0)
+        if isinstance(reply, Exception):
+            raise reply
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=reply))], usage=self.usage)
