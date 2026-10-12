@@ -61,6 +61,8 @@ models:
 
 Similarity alone finds related issues well but cannot tell a duplicate from a neighbouring problem: on astral-sh/uv and python-poetry/poetry no similarity threshold kept wrong duplicate claims under 10% without missing almost every real duplicate. So the comment always says "related issues", and only issues that `models.confirm` (or `models.llm`) judges to be the same problem are called possible duplicates and get the label. Without an LLM, the action never claims a duplicate. If the LLM fails or the call budget is spent, nothing is confirmed.
 
+Use a strong model for `models.confirm`: in a hand-checked sample, gpt-5.5 confirmed no related-but-different issues, while smaller models confirmed most of them. Results and method: [benchmarks/README.md](../benchmarks/README.md).
+
 ## Label suggestions
 
 With `labels.enabled: true`, `command: labels` suggests up to `max_labels` of your repository's existing labels for the new issue, from the labels on its most similar earlier issues (or picked by `models.labels` / `models.llm` when set), plus a priority (high, medium or low) from its reactions and how many similar issues were opened in the last 30 days. Run it as a second step on `issues: opened`:

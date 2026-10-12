@@ -29,7 +29,7 @@ uv run triage -R owner/repo bench         # measure duplicate detection on past 
 
 ## Status
 
-Duplicate detection does not yet meet its accuracy targets; see [#23](https://github.com/OptimusRahul/github-issues-analyzer/issues/23). The roadmap is in [#36](https://github.com/OptimusRahul/github-issues-analyzer/issues/36).
+Similarity search finds the duplicate among the top 3 related issues 27–52% of the time; a strong LLM then confirms duplicates with few false claims. See [benchmarks/README.md](benchmarks/README.md). The roadmap is in [#36](https://github.com/OptimusRahul/github-issues-analyzer/issues/36).
 
 ## Contributing
 
