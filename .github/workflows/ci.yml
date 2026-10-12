@@ -17,6 +17,13 @@ jobs:
       - run: uvx ruff check triage tests
       - run: uv run pytest tests/triage
 
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t issue-triage:ci .
+      - run: docker run --rm issue-triage:ci triage --help
+
   action:
     # Runs the composite action from this checkout, in dry run, against this repository's issues.
     runs-on: ubuntu-latest

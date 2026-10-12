@@ -17,9 +17,9 @@ from triage.commands import (
     check_duplicates,
     check_labels,
     ignored_labels,
+    run_digest,
 )
 from triage.config import ConfigError, load_config
-from triage.digest import build_digest, render_digest
 from triage.dupes import NotInIndex
 from triage.embed import SetupError, embed_pending, make_embedder
 from triage.github import GitHubClient, GitHubError
@@ -68,7 +68,23 @@ def build_parser() -> argparse.ArgumentParser:
     bench.add_argument("--llm", action="store_true", help="also measure with LLM confirmation")
     bench.add_argument("--labels", action="store_true", help="also measure label suggestions against applied labels")
     bench.add_argument("--out", type=Path, help="write the Markdown report here")
+    serve = commands.add_parser("serve", help="run the HTTP server (needs the server extra; repos from $TRIAGE_REPOS)")
+    serve.add_argument("--host", default="127.0.0.1", help="interface to listen on (default: localhost only)")
+    serve.add_argument("--port", type=int, default=8000)
+    serve.add_argument("--reload", action="store_true", help="restart on code changes (development)")
     return parser
+
+
+def _serve(args: argparse.Namespace) -> int:
+    try:
+        import uvicorn
+    except ImportError as e:
+        raise SetupError("The server needs the 'server' extra: uv sync --extra server") from e
+    os.environ["TRIAGE_CONFIG"] = str(args.config)
+    os.environ["TRIAGE_INDEX_DIR"] = str(args.index_dir)
+    # The server logs each request itself, path only; uvicorn's access log would include query strings.
+    uvicorn.run("triage.server:app_from_env", factory=True, host=args.host, port=args.port, reload=args.reload, access_log=False)
+    return 0
 
 
 def format_outcome(number: int, outcome: DupesOutcome) -> str:
@@ -121,14 +137,8 @@ def _digest(cfg, gh, store, repo, now) -> None:
         return
     embedder = make_embedder(cfg.models.embeddings)
     namer = chat_for(cfg, "themes")
-    sync_repo(gh, store, repo, now, cfg.comments_window_days)
-    embed_pending(store, embedder)
-    body = render_digest(repo, build_digest(store, embedder.name, cfg, now, namer), now)
-    if cfg.dry_run or cfg.digest.target == "none":
-        print(body)
-    else:
-        issue = gh.create_issue(repo, f"Triage digest – {now:%Y-%m-%d}", body)
-        print(f"Opened {issue['html_url']}")
+    outcome = run_digest(gh, store, embedder, cfg, repo, now, namer)
+    print(outcome.body if outcome.action == "dry-run" else f"Opened {outcome.url}")
     if usage := usage_lines(embedder, namer):
         print(usage)
 
@@ -234,6 +244,12 @@ def _run(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "serve":
+        try:
+            return _serve(args)
+        except EXPECTED_ERRORS as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
     if not args.repo:
         print("error: pass --repo owner/repo or set GITHUB_REPOSITORY", file=sys.stderr)
         return 2

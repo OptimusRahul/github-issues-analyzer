@@ -1,0 +1,13 @@
+services:
+  triage:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"   # localhost only; put a TLS reverse proxy in front to receive webhooks
+    env_file: .env
+    volumes:
+      - triage-data:/data                           # index files and the embedding model
+      - ./.github/issue-triage.yml:/config/issue-triage.yml:ro
+    restart: unless-stopped
+
+volumes:
+  triage-data:

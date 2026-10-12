@@ -7,6 +7,7 @@ from datetime import datetime
 
 from triage.comment import post_or_update, render_comment
 from triage.config import Config
+from triage.digest import build_digest, render_digest
 from triage.dupes import Candidate, find_candidates
 from triage.embed import Embedder, embed_pending
 from triage.github import GitHubClient
@@ -86,3 +87,24 @@ def check_labels(
     body = render_labels_comment(suggestion, applied=apply)
     action = post_or_update(gh, repo, number, body, suggestion.labels if apply else [])
     return LabelsOutcome(suggestion, action)
+
+
+@dataclass
+class DigestOutcome:
+    body: str = ""
+    url: str | None = None  # the digest issue, when one was opened
+    action: str = "none"  # disabled | dry-run | created
+
+
+def run_digest(
+    gh: GitHubClient, store: Store, embedder: Embedder, cfg: Config, repo: str, now: datetime, namer: ChatModel | None = None,
+) -> DigestOutcome:
+    if not cfg.digest.enabled:
+        return DigestOutcome(action="disabled")
+    sync_repo(gh, store, repo, now, cfg.comments_window_days)
+    embed_pending(store, embedder)
+    body = render_digest(repo, build_digest(store, embedder.name, cfg, now, namer), now)
+    if cfg.dry_run or cfg.digest.target == "none":
+        return DigestOutcome(body, action="dry-run")
+    issue = gh.create_issue(repo, f"Triage digest – {now:%Y-%m-%d}", body)
+    return DigestOutcome(body, issue["html_url"], "created")

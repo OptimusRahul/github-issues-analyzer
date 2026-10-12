@@ -36,7 +36,7 @@ Tests use fakes and never call GitHub or a model API, so they need no keys. New 
 - `triage/`: the issue triage engine and CLI. Most work happens here.
 - `tests/triage/`: tests for the engine.
 - `action.yml`: the GitHub Action, a wrapper around the CLI. Docs in `docs/github-action.md`.
-- `src/`, `main.py`: the legacy FastAPI server, to be rebuilt on the engine in v0.3.
+- `triage/server.py`, `Dockerfile`, `compose.yaml`: the HTTP server. Docs in `docs/server.md`.
 - `docs/superpowers/specs/`: the design spec. Read it before changing how a feature works.
 
 ## Pull requests
