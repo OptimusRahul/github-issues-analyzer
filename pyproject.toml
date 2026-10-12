@@ -50,9 +50,9 @@ local = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/github-issues-analyzer"
-Repository = "https://github.com/yourusername/github-issues-analyzer"
-Documentation = "https://github.com/yourusername/github-issues-analyzer/blob/main/README.md"
+Homepage = "https://github.com/OptimusRahul/github-issues-analyzer"
+Repository = "https://github.com/OptimusRahul/github-issues-analyzer"
+Documentation = "https://github.com/OptimusRahul/github-issues-analyzer/blob/master/README.md"
 
 [project.scripts]
 github-issues-analyzer = "src.app:main"

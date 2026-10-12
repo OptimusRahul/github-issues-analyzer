@@ -1,8 +1,43 @@
 # GitHub Issues Analyzer
 
-A FastAPI-based application that fetches GitHub repository issues, caches them locally, and uses OpenAI's LLM to provide intelligent analysis.
+Open source AI triage for GitHub issues. It runs in your own repository, on your own keys:
 
-## How to Run the Server
+- flags likely duplicates when an issue is opened
+- posts a weekly digest of themes and issues waiting for a maintainer
+- searches issues by keywords and meaning, and answers questions with cited issues
+
+It works with a local embedding model, so no API key is needed for duplicates, search or the digest. It starts in dry run and never closes, edits or assigns issues.
+
+## Use it as a GitHub Action
+
+See [docs/github-action.md](docs/github-action.md) for the workflow file and configuration.
+
+## Use the CLI
+
+Requires Python 3.10+ and [uv](https://github.com/astral-sh/uv).
+
+```bash
+uv sync --extra local                     # local embeddings
+export GITHUB_TOKEN=...                   # optional, raises the GitHub rate limit
+uv run triage -R owner/repo sync          # build the index
+uv run triage -R owner/repo dupes 123     # likely duplicates of issue #123
+uv run triage -R owner/repo search "error text"
+uv run triage -R owner/repo digest
+uv run triage -R owner/repo ask "why does install fail on Windows?"  # needs models.llm
+uv run triage -R owner/repo bench         # measure duplicate detection on past duplicates
+```
+
+## Status
+
+Duplicate detection does not yet meet its accuracy targets; see [#23](https://github.com/OptimusRahul/github-issues-analyzer/issues/23). The roadmap is in [#36](https://github.com/OptimusRahul/github-issues-analyzer/issues/36).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Licensed under the [MIT License](LICENSE).
+
+## Legacy server
+
+The original FastAPI app in `src/` will be rebuilt on the triage engine in v0.3. To run it today:
 
 ### Prerequisites
 
@@ -44,7 +79,7 @@ The API will be available at `http://localhost:8000`
 
 Interactive API documentation: `http://localhost:8000/docs`
 
-## Why SQLite?
+### Why SQLite?
 
 **SQLite** was chosen over alternatives like in-memory storage or JSON files because:
 

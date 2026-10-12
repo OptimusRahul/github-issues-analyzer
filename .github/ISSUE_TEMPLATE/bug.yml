@@ -1,0 +1,32 @@
+name: Bug report
+description: Something does not work as documented.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, and what happened instead. Paste error output as text.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. uv run triage -R owner/repo sync
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: "master @ abc1234, or the action ref you use"
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options: [CLI, GitHub Action, Legacy server (src/)]
+    validations:
+      required: true
