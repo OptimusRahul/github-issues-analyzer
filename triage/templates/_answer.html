@@ -1,0 +1,5 @@
+{% if error %}<p class="warn" role="alert">{{ error }}</p>{% else %}
+<div class="card"><p>{{ answer }}</p>
+{% if citations %}<p class="muted">Cited issues:</p><ul class="list">
+{% for h in citations %}<li><a href="{{ h.html_url }}">#{{ h.number }} {{ h.title }}</a> <span class="muted">{{ h.state }}</span></li>{% endfor %}
+</ul>{% endif %}</div>{% endif %}

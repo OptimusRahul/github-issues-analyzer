@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Repositories</h1>
+<table>
+  <thead><tr><th>Repository</th><th>Issues</th><th>Last sync</th></tr></thead>
+  <tbody>
+  {% for r in repos %}
+    <tr><td><a href="/r/{{ r.repo }}">{{ r.repo }}</a></td><td>{{ r.issues }}</td><td class="muted">{{ r.last_synced_at or "never" }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

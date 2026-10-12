@@ -16,6 +16,7 @@ from contextlib import asynccontextmanager, contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Callable
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
@@ -217,14 +218,22 @@ def create_app(
     app.add_exception_handler(GitHubError, error(502, "A GitHub request failed"))
     app.add_exception_handler(SetupError, error(500, "The server is missing an optional dependency"))
 
-    def authorize(request: Request) -> str:
-        scheme, _, key = request.headers.get("Authorization", "").partition(" ")
+    def key_digest(key: str) -> str | None:
+        """The configured hash of `key`, or None if it is not a valid API key."""
         digest = hashlib.sha256(key.encode()).hexdigest()
         known = any(hmac.compare_digest(digest, h) for h in settings.api_key_hashes)
-        if scheme.lower() != "bearer" or not key or not known:
-            raise HTTPException(401, "Missing or invalid API key", headers={"WWW-Authenticate": "Bearer"})
+        return digest if key and known else None
+
+    def rate_limit(digest: str) -> None:
         if wait := limiter.retry_after(digest):
             raise HTTPException(429, "Rate limit exceeded", headers={"Retry-After": str(wait)})
+
+    def authorize(request: Request) -> str:
+        scheme, _, key = request.headers.get("Authorization", "").partition(" ")
+        digest = key_digest(key) if scheme.lower() == "bearer" else None
+        if digest is None:
+            raise HTTPException(401, "Missing or invalid API key", headers={"WWW-Authenticate": "Bearer"})
+        rate_limit(digest)
         return digest
 
     def repo_of(owner: str, name: str) -> str:
@@ -319,6 +328,12 @@ def create_app(
         tasks.add_task(check_issue, repo, number)
         return JSONResponse({"status": "queued"}, status_code=202)
 
+    from triage.dashboard import register
+
+    register(app, SimpleNamespace(
+        key_digest=key_digest, rate_limit=rate_limit, repo_of=repo_of, open_store=open_store, embedder=embedder, cfg=cfg,
+        list_repos=list_repos, search=search, ask=ask_question, related=related,
+    ))
     return app
 
 

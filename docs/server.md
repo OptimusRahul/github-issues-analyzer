@@ -34,6 +34,15 @@ Without Docker: `uv sync --extra server --extra local`, export the same variable
 
 Make a key: `key=$(openssl rand -hex 24); echo "$key"; printf %s "$key" | shasum -a 256`. Give the key to clients and put the hash in `TRIAGE_API_KEYS`.
 
+## Dashboard
+
+Open `http://localhost:8000/` and sign in with an API key. Pages:
+
+- repositories with issue counts and last sync
+- per repository: search, Ask with links to the cited issues, new and growing themes, and the latest open issues with their related issues (and label suggestions when `labels.enabled`)
+
+Sessions last 12 hours and live in memory, so a restart signs everyone out. The session cookie is HttpOnly and SameSite=Strict, and pages send a Content Security Policy that only allows htmx from cdnjs.
+
 ## Webhook
 
 In the repository settings, add a webhook to `https://your-host/webhook`, content type `application/json`, the same secret as `TRIAGE_WEBHOOK_SECRET`, and the **Issues** event. Every request's `X-Hub-Signature-256` is checked; only `issues` / `opened` for a configured repository does anything.

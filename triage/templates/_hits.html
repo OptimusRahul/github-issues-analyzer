@@ -1,0 +1,5 @@
+{% if error %}<p class="warn" role="alert">{{ error }}</p>{% else %}
+<ul class="list">
+{% for h in hits %}<li><a href="{{ h.html_url }}">#{{ h.number }} {{ h.title }}</a> <span class="muted">{{ h.state }}</span></li>
+{% else %}<li class="muted">No matching issues.</li>{% endfor %}
+</ul>{% endif %}

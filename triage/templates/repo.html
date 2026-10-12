@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{{ repo }} · Issue triage{% endblock %}
+{% block main %}
+<h1>{{ repo }}</h1>
+<p class="muted">{{ issues }} issues · last sync {{ last_synced_at or "never" }}</p>
+
+<h2>Search</h2>
+<form class="inline" hx-get="/r/{{ repo }}/search" hx-target="#hits" hx-indicator="#search-wait">
+  <input type="text" name="q" aria-label="Search issues" placeholder="Error text, feature, anything" required>
+  <button type="submit">Search</button> <span id="search-wait" class="htmx-indicator muted">Searching…</span>
+</form>
+<div id="hits" aria-live="polite"></div>
+
+<h2>Ask</h2>
+<form class="inline" hx-post="/r/{{ repo }}/ask" hx-target="#answer" hx-indicator="#ask-wait">
+  <input type="text" name="question" aria-label="Question about the issues" maxlength="1000" placeholder="Why does install fail on Windows?" required>
+  <button type="submit">Ask</button> <span id="ask-wait" class="htmx-indicator muted">Thinking…</span>
+</form>
+<div id="answer" aria-live="polite"></div>
+
+<h2>Themes this {{ window_days }}-day window</h2>
+{% for t in themes %}
+  <div class="card"><strong>{{ t.name }}</strong> <span class="muted">{{ t.new }} new{% if t.previous %}, {{ t.previous }} the window before{% endif %}</span>
+    <div>{% for n in t.numbers[:8] %}<a href="{{ url_base }}/issues/{{ n }}">#{{ n }}</a> {% endfor %}</div></div>
+{% else %}
+  <p class="muted">No new or growing themes.</p>
+{% endfor %}
+
+<h2>Recent open issues</h2>
+<ul class="list">
+{% for i in recent %}
+  <li><a href="{{ i.html_url }}">#{{ i.number }} {{ i.title }}</a>
+    {% if i.labels %}<div>Suggested labels: {% for l in i.labels %}<span class="tag">{{ l }}</span>{% endfor %} <span class="muted">priority {{ i.priority }}</span></div>{% endif %}
+    {% if i.related %}<div class="muted">Related: {% for c in i.related %}<a href="{{ c.html_url }}">#{{ c.number }}</a> {{ c.title }}{% if not loop.last %} · {% endif %}{% endfor %}</div>{% endif %}
+  </li>
+{% else %}
+  <li class="muted">No open issues.</li>
+{% endfor %}
+</ul>
+{% endblock %}

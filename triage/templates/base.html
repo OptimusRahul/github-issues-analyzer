@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Issue triage{% endblock %}</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/2.0.4/htmx.min.js" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+<style>
+  :root { --bg: #fff; --fg: #1f2328; --muted: #59636e; --line: #d1d9e0; --accent: #0969da; --card: #f6f8fa; --warn: #9a6700; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #3d444d; --accent: #4493f8; --card: #151b23; --warn: #d29922; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  header a { color: var(--fg); font-weight: 600; text-decoration: none; }
+  main { max-width: 960px; margin: 0 auto; padding: 16px; }
+  a { color: var(--accent); }
+  h1 { font-size: 22px; margin: 8px 0 16px; } h2 { font-size: 17px; margin: 28px 0 8px; }
+  .muted { color: var(--muted); } .warn { color: var(--warn); }
+  form.inline { display: flex; gap: 8px; flex-wrap: wrap; }
+  input[type=text], input[type=password], textarea { flex: 1 1 240px; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); font: inherit; }
+  button { padding: 8px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--fg); font: inherit; cursor: pointer; }
+  button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  ul.list { list-style: none; padding: 0; margin: 8px 0; } ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin: 8px 0; }
+  .tag { display: inline-block; padding: 0 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; margin-right: 4px; }
+  table { width: 100%; border-collapse: collapse; } td, th { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+  .htmx-indicator { display: none; } .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: inline; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/">Issue triage</a>
+  {% if logged_in %}<form method="post" action="/logout"><button type="submit">Sign out</button></form>{% endif %}
+</header>
+<main>{% block main %}{% endblock %}</main>
+</body>
+</html>
