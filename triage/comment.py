@@ -1,4 +1,4 @@
-"""Render the duplicate-flag comment and post it, updating the tool's own earlier comment if present."""
+"""Render the duplicate-flag comment and post comments, updating the tool's own earlier comment if present."""
 
 from __future__ import annotations
 
@@ -20,8 +20,8 @@ def render_comment(candidates: list[Candidate]) -> str:
     return "\n".join(lines)
 
 
-def _is_own(comment: dict, me: str | None) -> bool:
-    if MARKER not in (comment.get("body") or ""):
+def _is_own(comment: dict, me: str | None, marker: str) -> bool:
+    if marker not in (comment.get("body") or ""):
         return False
     user = comment.get("user") or {}
     if me is not None:
@@ -30,15 +30,17 @@ def _is_own(comment: dict, me: str | None) -> bool:
     return user.get("type") == "Bot"
 
 
-def post_or_update(gh: GitHubClient, repo: str, number: int, body: str, label: str | None) -> str:
+def post_or_update(gh: GitHubClient, repo: str, number: int, body: str, labels: list[str]) -> str:
+    """Post `body`, or update the tool's earlier comment that starts with the same marker line, then add labels."""
     me = gh.viewer_login()
-    existing = next((c for c in gh.issue_comments(repo, number) if _is_own(c, me)), None)
+    marker = body.split("\n", 1)[0]
+    existing = next((c for c in gh.issue_comments(repo, number) if _is_own(c, me, marker)), None)
     if existing:
         gh.update_comment(repo, existing["id"], body)
         action = "updated"
     else:
         gh.create_comment(repo, number, body)
         action = "created"
-    if label:
-        gh.add_labels(repo, number, [label])
+    if labels:
+        gh.add_labels(repo, number, labels)
     return action

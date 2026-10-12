@@ -148,5 +148,8 @@ class GitHubClient:
     def create_issue(self, repo: str, title: str, body: str) -> dict:
         return self.request("POST", f"/repos/{repo}/issues", json={"title": title, "body": body}).json()
 
+    def list_labels(self, repo: str) -> list[str]:
+        return [label["name"] for page in self.pages(f"/repos/{repo}/labels", {"per_page": 100}) for label in page.items]
+
     def add_labels(self, repo: str, number: int, labels: list[str]) -> None:
         self.request("POST", f"/repos/{repo}/issues/{number}/labels", json={"labels": labels})

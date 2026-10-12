@@ -6,10 +6,10 @@ branding:
 
 inputs:
   command:
-    description: "dupes (check a newly opened issue) or digest (weekly summary)"
+    description: "dupes or labels (check a newly opened issue) or digest (weekly summary)"
     required: true
   issue-number:
-    description: Issue to check for duplicates (dupes only)
+    description: Issue to check (dupes and labels only)
     default: ${{ github.event.issue.number }}
   github-token:
     description: Token used to read issues and post comments
@@ -51,7 +51,7 @@ runs:
         TRIAGE_CONFIG: ${{ inputs.config }}
       run: |
         args=(--repo "$GITHUB_REPOSITORY" --config "$TRIAGE_CONFIG" "$TRIAGE_COMMAND")
-        if [ "$TRIAGE_COMMAND" = "dupes" ]; then args+=("$TRIAGE_ISSUE"); fi
+        if [ "$TRIAGE_COMMAND" = "dupes" ] || [ "$TRIAGE_COMMAND" = "labels" ]; then args+=("$TRIAGE_ISSUE"); fi
         uv run --quiet --project "$GITHUB_ACTION_PATH" --extra local triage "${args[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
 
     - name: Save index and embedding model

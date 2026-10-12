@@ -160,3 +160,15 @@ def test_chat_for_uses_task_model_and_names_the_task(tmp_path):
     assert chat_for(cfg, "ask").model == "big" and chat_for(cfg, "ask").task == "ask"
     assert chat_for(cfg, "confirm").model == "small"
     assert chat_for(load_config(None), "ask") is None
+
+
+def test_labels_command_prints_suggestions(fake, tmp_path, capsys):
+    from tests.triage.helpers import gh_issue as issue
+
+    config = tmp_path / "c.yml"
+    config.write_text("labels: {enabled: true, neighbors: 5, min_share: 0.3}\n")
+    fake.issues = [issue(1, "Crash opening settings on Windows", labels=["bug"]), issue(2, "Settings crash on Windows")]
+    fake.repo_labels = ["bug"]
+    assert cli.main(["-R", "o/r", "--config", str(config), "--index-dir", str(tmp_path), "labels", "2"]) == 0
+    out = capsys.readouterr().out
+    assert "Suggested labels for #2: bug" in out and "Dry run" in out

@@ -102,3 +102,10 @@ def test_negative_price_names_the_field(tmp_path):
 def test_unknown_key_inside_fallback_names_the_field(tmp_path):
     with pytest.raises(ConfigError, match="models.llm.fallback.modle"):
         load_config(write(tmp_path, "models:\n  llm: {base_url: http://x, model: m, fallback: {modle: x}}\n"))
+
+
+def test_labels_are_off_by_default_and_validated(tmp_path):
+    cfg = load_config(None)
+    assert cfg.labels.enabled is False and cfg.labels.apply is False
+    with pytest.raises(ConfigError, match="labels.max_labels"):
+        load_config(write(tmp_path, "labels: {max_labels: 0}\n"))

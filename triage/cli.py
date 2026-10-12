@@ -11,12 +11,19 @@ from pathlib import Path
 
 from triage.ask import AskError, ask
 from triage.bench import evaluate, evaluate_with_llm, ground_truth, render_report
-from triage.commands import DupesOutcome, check_duplicates
+from triage.commands import (
+    DupesOutcome,
+    LabelsOutcome,
+    check_duplicates,
+    check_labels,
+    ignored_labels,
+)
 from triage.config import ConfigError, load_config
 from triage.digest import build_digest, render_digest
 from triage.dupes import NotInIndex
 from triage.embed import SetupError, embed_pending, make_embedder
 from triage.github import GitHubClient, GitHubError
+from triage.labels import evaluate_labels
 from triage.llm import ChatModel, Confirmer
 from triage.search import Hit, hybrid_search
 from triage.store import Store
@@ -44,6 +51,8 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("sync", help="fetch new and updated issues and comments")
     dupes = commands.add_parser("dupes", help="find likely duplicates of an issue")
     dupes.add_argument("number", type=int)
+    labels = commands.add_parser("labels", help="suggest labels and a priority for an issue (needs labels.enabled)")
+    labels.add_argument("number", type=int)
     search = commands.add_parser("search", help="search issues by keywords and meaning")
     search.add_argument("query")
     search.add_argument("--state", choices=["open", "closed"])
@@ -57,6 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
     bench.add_argument("--max-pairs", type=int, default=1000, help="most recent duplicates to use")
     bench.add_argument("--sample", type=int, default=500, help="non-duplicate issues to check for false flags")
     bench.add_argument("--llm", action="store_true", help="also measure with LLM confirmation")
+    bench.add_argument("--labels", action="store_true", help="also measure label suggestions against applied labels")
     bench.add_argument("--out", type=Path, help="write the Markdown report here")
     return parser
 
@@ -72,6 +82,16 @@ def format_outcome(number: int, outcome: DupesOutcome) -> str:
         lines.append(line + (f" - {c.reason}" if c.reason else ""))
     lines.append(ACTION_TEXT[outcome.action])
     return "\n".join(lines)
+
+
+def format_labels(number: int, outcome: LabelsOutcome) -> str:
+    if outcome.action == "disabled":
+        return "Label suggestions are disabled in the config (labels.enabled)."
+    s = outcome.suggestion
+    if not s.labels:
+        return f"No label suggestions for #{number}. Priority: {s.priority}."
+    text = f"Suggested labels for #{number}: {', '.join(s.labels)}. Priority: {s.priority}."
+    return f"{text}\n{ACTION_TEXT[outcome.action]}"
 
 
 def format_hits(hits: list[Hit]) -> str:
@@ -136,6 +156,13 @@ def _bench(args, cfg, gh, store, repo, now) -> None:
             store, numbers, vectors, pairs, result.sample, threshold, confirmer, cfg.limits.max_llm_calls_per_run,
         )
     report = render_report(repo, result, llm_result)
+    if args.labels:
+        lab = evaluate_labels(store, embedder.name, gh.list_labels(repo), cfg.labels, ignored_labels(cfg), args.sample)
+        report += (
+            f"\n## Label suggestions\n\n- Issues replayed: {lab.issues}\n"
+            f"- Precision: {lab.precision:.0%}\n- Recall: {lab.recall:.0%}\n"
+            f"- Settings: {cfg.labels.neighbors} neighbors, min share {cfg.labels.min_share}, at most {cfg.labels.max_labels} labels\n"
+        )
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(report)
@@ -167,6 +194,13 @@ def _run(args: argparse.Namespace) -> int:
             outcome = check_duplicates(gh, store, embedder, cfg, repo, args.number, now, confirmer)
             print(format_outcome(args.number, outcome))
             if usage := usage_lines(embedder, confirmer):
+                print(usage)
+        elif args.command == "labels":
+            embedder = make_embedder(cfg.models.embeddings)
+            chat = chat_for(cfg, "labels")
+            outcome = check_labels(gh, store, embedder, cfg, repo, args.number, now, chat)
+            print(format_labels(args.number, outcome))
+            if usage := usage_lines(embedder, chat):
                 print(usage)
         elif args.command == "search":
             embedder = make_embedder(cfg.models.embeddings)
