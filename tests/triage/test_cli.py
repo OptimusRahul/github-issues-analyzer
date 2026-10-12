@@ -42,7 +42,7 @@ def test_sync_prints_summary_and_writes_index(fake, tmp_path, capsys):
 def test_dupes_dry_run_prints_candidates_and_posts_nothing(fake, tmp_path, capsys):
     assert cli.main(args(tmp_path, "dupes", "2")) == 0
     out = capsys.readouterr().out
-    assert "Likely duplicates of #2:" in out and "#1" in out and "Dry run" in out
+    assert "Related issues for #2:" in out and "#1" in out and "Dry run" in out
     assert fake.issue_comments == {}
 
 
@@ -103,7 +103,7 @@ def test_llm_call_limit_of_zero_disables_the_llm_in_dupes(fake, tmp_path, monkey
 
     monkeypatch.setattr(cli, "Confirmer", confirmer_without_replies)
     assert cli.main(args(tmp_path, "dupes", "2")) == 0
-    assert "Likely duplicates of #2:" in capsys.readouterr().out
+    assert "Related issues for #2:" in capsys.readouterr().out
 
 
 def test_search_prints_matching_issues(fake, tmp_path, capsys):

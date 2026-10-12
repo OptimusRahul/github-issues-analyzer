@@ -1,4 +1,4 @@
-"""Find likely duplicates of an issue by cosine similarity over the index."""
+"""Find related issues, the possible duplicates, by cosine similarity over the index."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ class Candidate:
     state: str
     score: float
     reason: str | None = None
+    confirmed: bool = False  # an LLM agreed it is the same problem
 
 
 class NotInIndex(LookupError):

@@ -39,8 +39,9 @@ def test_posts_comment_and_label_when_dry_run_is_off(store):
     fake = FakeGitHub(issues=ISSUES)
     outcome = run(fake, store, config(dry_run=False))
     assert outcome.action == "created"
-    assert "#1" in fake.issue_comments[2][0]["body"]
-    assert fake.labels[2] == ["possible-duplicate"]
+    body = fake.issue_comments[2][0]["body"]
+    assert "#1" in body and "Related issues" in body and "duplicate of" not in body
+    assert 2 not in fake.labels  # no LLM: related issues only, never a duplicate claim or label
 
 
 def test_rerun_updates_instead_of_posting_twice(store):
@@ -62,12 +63,22 @@ def test_disabled_skips_search(store):
     assert run(FakeGitHub(issues=ISSUES), store, cfg).action == "disabled"
 
 
-def test_llm_rejection_means_nothing_is_posted(store):
+def test_llm_rejection_lists_related_issues_without_label(store):
     fake = FakeGitHub(issues=ISSUES)
     confirmer = Confirmer(LLMConfig(base_url="http://x", model="m"), client=FakeClient(json.dumps({"duplicates": []})))
     outcome = run(fake, store, config(dry_run=False), confirmer=confirmer)
-    assert outcome.action == "none"
-    assert fake.issue_comments == {}
+    assert outcome.action == "created" and not any(c.confirmed for c in outcome.candidates)
+    assert 2 not in fake.labels
+
+
+def test_llm_confirmed_duplicate_is_flagged_and_labelled(store):
+    fake = FakeGitHub(issues=ISSUES)
+    reply = json.dumps({"duplicates": [{"number": 1, "reason": "Same settings crash"}]})
+    confirmer = Confirmer(LLMConfig(base_url="http://x", model="m"), client=FakeClient(reply))
+    outcome = run(fake, store, config(dry_run=False), confirmer=confirmer)
+    assert [c.confirmed for c in outcome.candidates] == [True]
+    assert "may be a duplicate of" in fake.issue_comments[2][0]["body"]
+    assert fake.labels[2] == ["possible-duplicate"]
 
 
 def test_pull_request_number_gives_clear_error(store):

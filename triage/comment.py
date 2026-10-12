@@ -9,14 +9,21 @@ from triage.text import sanitize
 MARKER = "<!-- issue-triage:duplicates -->"
 
 
+def _line(c: Candidate) -> str:
+    line = f"- #{c.number} {sanitize(c.title, limit=120)}"
+    return line + (f" ({c.reason})" if c.reason else "")
+
+
 def render_comment(candidates: list[Candidate]) -> str:
-    lines = [MARKER, "This issue may be a duplicate of:", ""]
-    for c in candidates:
-        line = f"- #{c.number} {sanitize(c.title, limit=120)}"
-        if c.reason:
-            line += f" ({c.reason})"
-        lines.append(line)
-    lines += ["", "<sub>Flagged by issue-triage. It never closes issues; a maintainer decides.</sub>"]
+    """Confirmed candidates are called possible duplicates; the rest are only listed as related issues."""
+    confirmed = [c for c in candidates if c.confirmed]
+    related = [c for c in candidates if not c.confirmed]
+    lines = [MARKER]
+    if confirmed:
+        lines += ["This issue may be a duplicate of:", "", *map(_line, confirmed), ""]
+    if related:
+        lines += ["Related issues that may help:" if not confirmed else "Related issues:", "", *map(_line, related), ""]
+    lines.append("<sub>Found by issue-triage. It never closes issues; a maintainer decides.</sub>")
     return "\n".join(lines)
 
 

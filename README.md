@@ -2,7 +2,7 @@
 
 Open source AI triage for GitHub issues. It runs in your own repository, on your own keys:
 
-- flags likely duplicates when an issue is opened
+- lists related issues when an issue is opened, and flags the ones an LLM confirms as possible duplicates
 - posts a weekly digest of themes and issues waiting for a maintainer
 - searches issues by keywords and meaning, and answers questions with cited issues
 
@@ -20,7 +20,7 @@ Requires Python 3.10+ and [uv](https://github.com/astral-sh/uv).
 uv sync --extra local                     # local embeddings
 export GITHUB_TOKEN=...                   # optional, raises the GitHub rate limit
 uv run triage -R owner/repo sync          # build the index
-uv run triage -R owner/repo dupes 123     # likely duplicates of issue #123
+uv run triage -R owner/repo dupes 123     # related issues and possible duplicates of #123
 uv run triage -R owner/repo search "error text"
 uv run triage -R owner/repo digest
 uv run triage -R owner/repo ask "why does install fail on Windows?"  # needs models.llm

@@ -75,10 +75,11 @@ def format_outcome(number: int, outcome: DupesOutcome) -> str:
     if outcome.action == "disabled":
         return "Duplicate detection is disabled in the config."
     if not outcome.candidates:
-        return f"No likely duplicates for #{number}."
-    lines = [f"Likely duplicates of #{number}:"]
+        return f"No related issues for #{number}."
+    lines = [f"Related issues for #{number}:"]
     for c in outcome.candidates:
-        line = f"  #{c.number} ({c.score:.2f}, {c.state}) {c.title}"
+        mark = "possible duplicate, " if c.confirmed else ""
+        line = f"  #{c.number} ({mark}{c.score:.2f}, {c.state}) {c.title}"
         lines.append(line + (f" - {c.reason}" if c.reason else ""))
     lines.append(ACTION_TEXT[outcome.action])
     return "\n".join(lines)
@@ -151,7 +152,7 @@ def _bench(args, cfg, gh, store, repo, now) -> None:
     llm_result = None
     confirmer = chat_for(cfg, "confirm", Confirmer) if args.llm else None
     if confirmer is not None:
-        threshold = result.recommended.threshold if result.recommended else cfg.duplicates.threshold
+        threshold = cfg.duplicates.threshold  # related issues are listed from here; the LLM picks duplicates
         llm_result = evaluate_with_llm(
             store, numbers, vectors, pairs, result.sample, threshold, confirmer, cfg.limits.max_llm_calls_per_run,
         )

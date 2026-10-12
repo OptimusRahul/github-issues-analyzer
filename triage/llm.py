@@ -121,14 +121,14 @@ def _parse_json(content: str) -> dict | None:
 
 class Confirmer(ChatModel):
     def confirm(self, issue: dict, candidates: list[Candidate], lookup: Callable[[int], dict]) -> list[Candidate]:
-        """Keep the candidates the model says are the same problem. Falls back to all candidates, without reasons,
+        """The candidates the model says are the same problem, marked confirmed. None are confirmed
         if the model never returns valid JSON or the call budget is spent."""
         if not candidates:
             return []
         prompt = build_prompt(issue, [lookup(c.number) for c in candidates])
         data = self.ask_json(SYSTEM_PROMPT, prompt, lambda d: isinstance(d.get("duplicates"), list))
         if data is None:
-            return candidates
+            return []
         by_number = {c.number: c for c in candidates}
         confirmed: list[Candidate] = []
         for item in data["duplicates"]:
@@ -136,5 +136,6 @@ class Confirmer(ChatModel):
             if is_int(number) and number in by_number:
                 candidate = by_number.pop(number)
                 candidate.reason = sanitize(str(item.get("reason") or "")) or None
+                candidate.confirmed = True
                 confirmed.append(candidate)
         return confirmed

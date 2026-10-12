@@ -1,4 +1,4 @@
-"""Weekly digest: new and growing themes, issues needing attention, likely duplicates still open."""
+"""Weekly digest: new and growing themes, issues needing attention, similar open issues."""
 
 from __future__ import annotations
 
@@ -114,8 +114,8 @@ def render_digest(repo: str, digest: Digest, now: datetime) -> str:
         ],
         "Most-wanted, no maintainer reply": [f"- {_issue(i)}: {i['reactions_total']} reactions" for i in digest.most_wanted],
         "Waiting on maintainers": [f"- {_issue(i)}: last comment {days} days ago" for i, days in digest.waiting],
-        "Likely duplicates still open": [
-            f"- #{new} may duplicate #{old} (similarity {score:.2f})" for new, old, score in digest.open_duplicates
+        "Similar open issues": [
+            f"- #{new} looks similar to #{old} (similarity {score:.2f})" for new, old, score in digest.open_duplicates
         ],
     }
     lines = [

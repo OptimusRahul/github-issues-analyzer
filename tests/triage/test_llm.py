@@ -35,7 +35,7 @@ def test_confirm_keeps_only_listed_candidates_with_sanitized_reasons():
     c = confirmer(reply)
     result = c.confirm(ISSUES[1], candidates(), ISSUES.get)
     assert [x.number for x in result] == [2]
-    assert result[0].reason == "Same startup crash, see bob"
+    assert result[0].reason == "Same startup crash, see bob" and result[0].confirmed
     assert c.calls == 1
     request = c.client.calls[0]
     assert request["temperature"] == 0 and request["response_format"] == {"type": "json_object"}
@@ -51,11 +51,9 @@ def test_confirm_returns_empty_when_model_rejects_all():
     assert confirmer('{"duplicates": []}').confirm(ISSUES[1], candidates(), ISSUES.get) == []
 
 
-def test_confirm_retries_once_on_invalid_json_then_falls_back_unconfirmed():
+def test_confirm_retries_once_on_invalid_json_then_confirms_nothing():
     c = confirmer("not json", "still not json")
-    result = c.confirm(ISSUES[1], candidates(), ISSUES.get)
-    assert [x.number for x in result] == [2, 3]
-    assert all(x.reason is None for x in result)
+    assert c.confirm(ISSUES[1], candidates(), ISSUES.get) == []
     assert c.calls == 2
 
 
@@ -65,10 +63,9 @@ def test_confirm_without_candidates_makes_no_call():
     assert c.calls == 0
 
 
-def test_confirm_treats_non_list_duplicates_as_invalid_and_falls_back():
+def test_confirm_treats_non_list_duplicates_as_invalid():
     c = confirmer('{"duplicates": 5}', '{"duplicates": {"number": 2}}')
-    result = c.confirm(ISSUES[1], candidates(), ISSUES.get)
-    assert [x.number for x in result] == [2, 3]
+    assert c.confirm(ISSUES[1], candidates(), ISSUES.get) == []
     assert c.calls == 2
 
 
@@ -81,10 +78,9 @@ def test_confirmer_reports_token_usage():
     assert c.usage_summary() == "llm m: 2 calls, 20 prompt + 6 completion tokens"
 
 
-def test_confirm_stops_at_call_budget_and_falls_back_unconfirmed():
+def test_confirm_stops_at_call_budget_and_confirms_nothing():
     c = Confirmer(LLMConfig(base_url="http://x", model="m"), client=FakeClient("not json"), max_calls=1)
-    result = c.confirm(ISSUES[1], candidates(), ISSUES.get)
-    assert [x.number for x in result] == [2, 3]
+    assert c.confirm(ISSUES[1], candidates(), ISSUES.get) == []
     assert c.calls == 1
 
 

@@ -37,13 +37,15 @@ def check_duplicates(
     sync_repo(gh, store, repo, now, cfg.comments_window_days)
     embed_pending(store, embedder)
     candidates = find_candidates(store, embedder.name, number, cfg.duplicates, cfg.exclude_labels, now)
-    if confirmer is not None:
-        candidates = confirmer.confirm(store.issue(number), candidates, store.issue)
     if not candidates:
         return DupesOutcome(action="none")
+    if confirmer is not None:
+        confirmer.confirm(store.issue(number), candidates, store.issue)  # marks the confirmed ones
+        candidates.sort(key=lambda c: not c.confirmed)  # stable: confirmed first, each group best first
     if cfg.dry_run:
         return DupesOutcome(candidates, "dry-run")
-    labels = [cfg.duplicates.label] if cfg.duplicates.label else []
+    confirmed = any(c.confirmed for c in candidates)
+    labels = [cfg.duplicates.label] if cfg.duplicates.label and confirmed else []
     action = post_or_update(gh, repo, number, render_comment(candidates), labels)
     return DupesOutcome(candidates, action)
 

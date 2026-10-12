@@ -52,7 +52,7 @@ def test_render_lists_sections_and_sanitizes_titles(store):
     text = render_digest("o/r", build_digest(store, setup(store), CFG, NOW), NOW)
     assert text.startswith("# Triage digest – 2026-06-01")
     for heading in ("## New themes", "## Growing themes", "## Most-wanted, no maintainer reply",
-                    "## Waiting on maintainers", "## Likely duplicates still open"):
+                    "## Waiting on maintainers", "## Similar open issues"):
         assert heading in text
     assert "#4" in text and "30 reactions" in text
     assert "@octocat" not in text

@@ -30,7 +30,7 @@ YAML
 uv run triage -R OWNER/REPO --config /tmp/report.yml digest > reports/OWNER__REPO.md
 ```
 
-Take the "Likely duplicates still open" section. Open each pair on GitHub and drop any that are clearly not the same problem; keep up to 10 good pairs.
+Take the "Similar open issues" section. Open each pair on GitHub and drop any that are clearly not the same problem; keep up to 10 good pairs.
 
 ## Message
 

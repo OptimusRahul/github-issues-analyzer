@@ -1,6 +1,6 @@
 # Issue triage as a GitHub Action
 
-Add one workflow file to your repository. The action flags likely duplicates when an issue is opened and posts a weekly digest. It uses the workflow's own token and a local embedding model, so it needs no API key. It starts in dry run: results go to the run's job summary until you set `dry_run: false`.
+Add one workflow file to your repository. When an issue is opened, the action comments with related earlier issues and, if an LLM is configured, flags the ones it confirms as possible duplicates. It also posts a weekly digest. It uses the workflow's own token and a local embedding model, so it needs no API key. It starts in dry run: results go to the run's job summary until you set `dry_run: false`.
 
 ## Workflow
 
@@ -42,8 +42,8 @@ Optional `.github/issue-triage.yml`:
 ```yaml
 dry_run: true              # set to false to post comments, labels and the digest issue
 duplicates:
-  threshold: 0.86          # run `triage bench` locally to get the value for your repo
-  label: possible-duplicate
+  threshold: 0.86          # issues at least this similar are listed as related; `triage bench` helps pick it
+  label: possible-duplicate  # added only when the LLM confirms a duplicate
 digest:
   target: issue            # issue | none
   window_days: 7
@@ -56,6 +56,10 @@ models:
   embeddings: { provider: local }
   llm: { base_url: https://api.openai.com/v1, model: your-model-name, api_key_env: TRIAGE_LLM_KEY }
 ```
+
+## Related issues and possible duplicates
+
+Similarity alone finds related issues well but cannot tell a duplicate from a neighbouring problem: on astral-sh/uv and python-poetry/poetry no similarity threshold kept wrong duplicate claims under 10% without missing almost every real duplicate. So the comment always says "related issues", and only issues that `models.confirm` (or `models.llm`) judges to be the same problem are called possible duplicates and get the label. Without an LLM, the action never claims a duplicate. If the LLM fails or the call budget is spent, nothing is confirmed.
 
 ## Label suggestions
 

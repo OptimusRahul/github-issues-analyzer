@@ -3,12 +3,18 @@ from triage.comment import MARKER, post_or_update, render_comment
 from triage.dupes import Candidate
 
 
-def test_render_lists_candidates_with_reasons_and_marker():
-    body = render_comment([Candidate(3, "Settings crash", "u", "open", 0.9, "Same crash"), Candidate(1, "Crash", "u", "closed", 0.8)])
+def test_render_splits_confirmed_duplicates_from_related_issues():
+    body = render_comment([Candidate(3, "Settings crash", "u", "open", 0.9, "Same crash", confirmed=True), Candidate(1, "Crash", "u", "closed", 0.8)])
     assert body.startswith(MARKER)
-    assert "- #3 Settings crash (Same crash)" in body
-    assert "- #1 Crash" in body
+    duplicates, related = body.split("Related issues")
+    assert "may be a duplicate of" in duplicates and "- #3 Settings crash (Same crash)" in duplicates
+    assert "- #1 Crash" in related
     assert "never closes issues" in body
+
+
+def test_render_without_confirmed_duplicates_lists_related_only():
+    body = render_comment([Candidate(1, "Crash", "u", "closed", 0.8)])
+    assert "duplicate of" not in body and "Related issues" in body and "- #1 Crash" in body
 
 
 def test_render_neutralises_mentions_and_html_in_titles():
