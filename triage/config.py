@@ -34,6 +34,16 @@ class DigestConfig:
 
 
 @dataclass
+class LabelsConfig:
+    enabled: bool = False
+    apply: bool = False  # add the suggested labels; otherwise they are only shown in a comment
+    max_labels: int = 3
+    neighbors: int = 10  # similar earlier issues whose labels are counted
+    min_share: float = 0.3  # share of the neighbors' similarity a label needs to be suggested
+    similar_threshold: float = 0.85  # similarity at which an earlier issue counts toward priority
+
+
+@dataclass
 class EmbeddingsConfig:
     provider: str = "local"  # local | openai
     model: str = "BAAI/bge-small-en-v1.5"
@@ -56,7 +66,7 @@ class LLMConfig:
         return bool(self.base_url and self.model)
 
 
-TASKS = ("confirm", "ask", "themes")
+TASKS = ("confirm", "ask", "themes", "labels")
 
 
 @dataclass
@@ -66,6 +76,7 @@ class ModelsConfig:
     confirm: LLMConfig | None = None  # duplicate confirmation
     ask: LLMConfig | None = None
     themes: LLMConfig | None = None  # theme naming in the digest
+    labels: LLMConfig | None = None  # label suggestions
 
     def llm_for(self, task: str) -> LLMConfig:
         return getattr(self, task) or self.llm
@@ -81,6 +92,7 @@ class Config:
     dry_run: bool = True
     duplicates: DuplicatesConfig = field(default_factory=DuplicatesConfig)
     digest: DigestConfig = field(default_factory=DigestConfig)
+    labels: LabelsConfig = field(default_factory=LabelsConfig)
     exclude_labels: list[str] = field(default_factory=list)
     comments_window_days: int = 180
     models: ModelsConfig = field(default_factory=ModelsConfig)
@@ -136,6 +148,14 @@ def _validate(cfg: Config) -> None:
             is_int(cfg.limits.max_llm_calls_per_run) and cfg.limits.max_llm_calls_per_run >= 0,
             "limits.max_llm_calls_per_run: must be a non-negative integer",
         ),
+    ]
+    lab = cfg.labels
+    checks += [
+        (isinstance(lab.enabled, bool) and isinstance(lab.apply, bool), "labels.enabled and labels.apply: must be true or false"),
+        (is_int(lab.max_labels) and 1 <= lab.max_labels <= 10, "labels.max_labels: must be an integer from 1 to 10"),
+        (is_int(lab.neighbors) and 1 <= lab.neighbors <= 100, "labels.neighbors: must be an integer from 1 to 100"),
+        (is_number(lab.min_share) and 0 < lab.min_share <= 1, "labels.min_share: must be a number greater than 0 and at most 1"),
+        (is_number(lab.similar_threshold) and 0 < lab.similar_threshold <= 1, "labels.similar_threshold: must be a number greater than 0 and at most 1"),
     ]
     models = cfg.models
     llms = [(f"models.{t}", c) for t in ("llm", *TASKS) if (c := getattr(models, t))]

@@ -48,10 +48,27 @@ digest:
   target: issue            # issue | none
   window_days: 7
   waiting_days: 14
+labels:
+  enabled: false           # suggest labels and a priority for new issues (command: labels)
+  apply: false             # true adds the suggested labels; otherwise they are only listed in a comment
+  max_labels: 3
 models:
   embeddings: { provider: local }
   llm: { base_url: https://api.openai.com/v1, model: your-model-name, api_key_env: TRIAGE_LLM_KEY }
 ```
+
+## Label suggestions
+
+With `labels.enabled: true`, `command: labels` suggests up to `max_labels` of your repository's existing labels for the new issue, from the labels on its most similar earlier issues (or picked by `models.labels` / `models.llm` when set), plus a priority (high, medium or low) from its reactions and how many similar issues were opened in the last 30 days. Run it as a second step on `issues: opened`:
+
+```yaml
+      - uses: OptimusRahul/github-issues-analyzer@master
+        if: github.event_name == 'issues'
+        with:
+          command: labels
+```
+
+Measure it on your repository first with `triage bench --labels`: it replays labelled issues and reports precision and recall against the labels maintainers applied. On astral-sh/uv (local embeddings, default settings) it scored 43% precision and 35% recall, so labels are listed, not applied, by default.
 
 ## Models
 

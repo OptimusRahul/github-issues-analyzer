@@ -93,6 +93,7 @@ class FakeGitHub:
         self.fail_once: set[str] = set()
         self.issue_comments: dict[int, list[dict]] = {}
         self.labels: dict[int, list[str]] = {}
+        self.repo_labels: list[str] = []
         self.created_issues: list[dict] = []
         self.login = "triage-bot"
         self.user_forbidden = False  # True mimics GitHub App / Actions tokens, which cannot read /user
@@ -140,6 +141,8 @@ class FakeGitHub:
             self.created_issues.append(json.loads(request.content))
             number = 900 + len(self.created_issues)
             return httpx.Response(201, json={"number": number, "html_url": f"https://github.com/{self.repo}/issues/{number}"})
+        if method == "GET" and path == f"{base}/labels":
+            return self._page(request, "labels", [{"name": name} for name in self.repo_labels])
         if method == "GET" and path == f"{base}/issues":
             return self._page(request, "issues", self.issues)
         if method == "GET" and path == f"{base}/issues/comments":
