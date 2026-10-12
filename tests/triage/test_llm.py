@@ -116,6 +116,18 @@ def test_retries_without_json_mode_when_server_rejects_it():
     assert "response_format" not in c.client.calls[2]  # remembered for later calls
 
 
+def test_retries_without_temperature_for_models_that_reject_it():
+    c = chat(bad_request("Unsupported value: 'temperature' does not support 0 with this model."), '{"ok": true}')
+    assert c.ask_json("s", "p", lambda d: True) == {"ok": True}
+    assert "temperature" not in c.client.calls[1] and "response_format" in c.client.calls[1]
+
+
+def test_other_bad_requests_are_not_retried():
+    c = chat(bad_request("model not found"))
+    assert c.ask_json("s", "p", lambda d: True) is None
+    assert c.calls == 1
+
+
 def test_api_error_without_fallback_returns_none():
     c = chat(connection_error())
     assert c.ask_json("s", "p", lambda d: True) is None

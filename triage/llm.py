@@ -52,7 +52,7 @@ class ChatModel:
         self.completion_tokens = 0
         self.cost = 0.0
         self.used_fallback = False
-        self.json_mode = {}  # per client: False once the server rejected response_format
+        self.dropped = {}  # per client: optional parameters the server rejected
 
     def usage_summary(self) -> str:
         task = f" ({self.task})" if self.task else ""
@@ -85,16 +85,18 @@ class ChatModel:
 
     def _call(self, client, cfg: LLMConfig, system: str, prompt: str) -> str:
         messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
-        kwargs = {"model": cfg.model, "temperature": 0, "messages": messages}
-        if self.json_mode.get(id(client), True):
-            kwargs["response_format"] = {"type": "json_object"}
+        optional = {"temperature": 0, "response_format": {"type": "json_object"}}
+        dropped = self.dropped.setdefault(id(client), set())
+        kwargs = {"model": cfg.model, "messages": messages, **{k: v for k, v in optional.items() if k not in dropped}}
         self.calls += 1
         try:
             response = client.chat.completions.create(**kwargs)
         except openai.BadRequestError as e:
-            if "response_format" not in kwargs or "response_format" not in str(e):
+            # Some servers reject JSON mode (then the prompt alone asks for JSON); reasoning models reject temperature.
+            rejected = next((k for k in optional if k in kwargs and (getattr(e, "param", None) == k or k in str(e))), None)
+            if rejected is None:
                 raise
-            self.json_mode[id(client)] = False  # e.g. some open-weight servers: ask for JSON in the prompt only
+            dropped.add(rejected)
             return self._call(client, cfg, system, prompt)
         usage = getattr(response, "usage", None)
         if usage is not None:
