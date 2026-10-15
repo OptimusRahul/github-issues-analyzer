@@ -62,6 +62,14 @@ def test_honours_retry_after_on_secondary_limit():
     assert sleeps == [5.0]
 
 
+def test_retries_transient_server_error_on_get():
+    sleeps = []
+    responses = [httpx.Response(500), httpx.Response(200, json={"ok": True})]
+    client = make_client(lambda request: responses.pop(0), sleep=sleeps.append)
+    assert client.request("GET", "/x").json() == {"ok": True}
+    assert sleeps == [1.0]
+
+
 def test_rate_limit_longer_than_max_wait_raises():
     def handler(request):
         return httpx.Response(403, headers={"x-ratelimit-remaining": "0", "x-ratelimit-reset": "9000"})

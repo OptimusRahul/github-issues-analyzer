@@ -11,7 +11,7 @@ import httpx
 API_URL = "https://api.github.com"
 MAX_RATE_LIMIT_WAITS = 10
 MAX_TRANSIENT_RETRIES = 3
-TRANSIENT_STATUS = {502, 503, 504}
+TRANSIENT_STATUS = {500, 502, 503, 504}
 
 
 class GitHubError(Exception):

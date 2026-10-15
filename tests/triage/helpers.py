@@ -110,7 +110,7 @@ class FakeGitHub:
         key = f"{kind}:{page}"
         if key in self.fail_once:
             self.fail_once.discard(key)
-            return httpx.Response(500, json={"message": "boom"})
+            return httpx.Response(422, json={"message": "boom"})
         sort_key = {"updated": "updated_at", "created": "created_at"}.get(request.url.params.get("sort"))
         if sort_key:
             items = sorted(items, key=lambda item: item[sort_key])
